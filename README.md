@@ -30,7 +30,7 @@ Once installed, the extension will be active on all web pages:
 ## Permissions
 The extension requires the following permissions:
 - `activeTab`: To access the content of the current tab and make emails clickable.
-- `storage`: To store the Intercom App Code.
+- `storage`: To store the Intercom App Code. The code is stored locally.
 - `tabs`: To manage the Intercom search tab.
 
 ## Development
