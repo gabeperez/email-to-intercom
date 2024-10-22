@@ -1,0 +1,28 @@
+{
+    "manifest_version": 3,
+    "name": "Email to Intercom Linker",
+    "version": "1.0",
+    "description": "Makes email addresses clickable and opens Intercom search for the clicked email.",
+    "permissions": [
+        "activeTab",
+        "storage",
+        "tabs"
+    ],
+    "host_permissions": [
+        "https://app.intercom.io/*"
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": ["email2inter.js"]
+        }
+    ]
+}
