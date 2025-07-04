@@ -13,6 +13,10 @@
   <input type="text" id="appCodeInput" placeholder="Enter your Intercom App Code">
   <label for="allowedDomainsInput">Allowed Domains or Pages (one per line):</label>
   <textarea id="allowedDomainsInput" rows="4" placeholder="e.g. example.com or https://site.com/page"></textarea>
+  <small id="allowedDomainsHelp" style="display:block;margin-bottom:8px;color:#555;">
+    <b>Tip:</b> Enter a full URL (starting with http/https) to restrict to that exact page.<br>
+    Enter a domain (like <code>example.com</code> or <code>www.example.com</code>) to enable the extension on all pages of that domain.
+  </small>
   <button id="saveButton">Save</button>
   <p id="status"></p>
   <script src="popup.js"></script>

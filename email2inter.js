@@ -32,9 +32,12 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     return;
   }
   const allowedDomains = result.allowedDomains;
-  if (!matchesAllowedDomains(window.location.href, allowedDomains)) {
-    // Not allowed, do nothing
-    return;
+  // If allowedDomains is empty or not set, run everywhere (default behavior)
+  if (Array.isArray(allowedDomains) && allowedDomains.length > 0) {
+    if (!matchesAllowedDomains(window.location.href, allowedDomains)) {
+      // Not allowed, do nothing
+      return;
+    }
   }
 
   // Improved email regex
