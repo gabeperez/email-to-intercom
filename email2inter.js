@@ -442,26 +442,96 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     e.preventDefault();
     e.stopPropagation(); // Prevent event bubbling
     
-    // Try to extract name from nearby text (look for common patterns)
+    // Try to extract name from multiple sources
     let name = '';
-    const parentElement = e.target.parentElement;
-    if (parentElement) {
-      // Look for name patterns like "John Doe <john@example.com>" or "john@example.com (John Doe)"
-      const textContent = parentElement.textContent;
-      const emailIndex = textContent.indexOf(email);
+    
+    // 1. Check for tooltip data (title attribute)
+    const target = e.target;
+    if (target.title && target.title.trim() && !target.title.includes('@')) {
+      name = target.title.trim();
+    }
+    
+    // 2. Check for data attributes that might contain name
+    if (!name && target.dataset) {
+      const possibleNameFields = ['name', 'fullname', 'fullName', 'userName', 'username', 'displayName'];
+      for (const field of possibleNameFields) {
+        if (target.dataset[field] && target.dataset[field].trim()) {
+          name = target.dataset[field].trim();
+          break;
+        }
+      }
+    }
+    
+    // 3. Check for aria-label (accessibility attribute)
+    if (!name && target.getAttribute('aria-label')) {
+      const ariaLabel = target.getAttribute('aria-label').trim();
+      if (ariaLabel && !ariaLabel.includes('@')) {
+        name = ariaLabel;
+      }
+    }
+    
+    // 4. Look for name in nearby text (existing logic)
+    if (!name) {
+      const parentElement = e.target.parentElement;
+      if (parentElement) {
+        const textContent = parentElement.textContent;
+        const emailIndex = textContent.indexOf(email);
+        
+        if (emailIndex > 0) {
+          // Look for name before email
+          const beforeEmail = textContent.substring(0, emailIndex).trim();
+          if (beforeEmail && beforeEmail.length < 50 && !beforeEmail.includes('@')) {
+            name = beforeEmail;
+          }
+        } else if (emailIndex >= 0 && emailIndex + email.length < textContent.length) {
+          // Look for name after email
+          const afterEmail = textContent.substring(emailIndex + email.length).trim();
+          if (afterEmail && afterEmail.length < 50 && !afterEmail.includes('@')) {
+            name = afterEmail.replace(/^[^\w\s]*/, '').replace(/[^\w\s]*$/, '');
+          }
+        }
+      }
+    }
+    
+    // 5. Look for name in parent elements (broader search)
+    if (!name) {
+      let currentElement = e.target.parentElement;
+      let searchDepth = 0;
+      const maxDepth = 3; // Don't go too deep in the DOM
       
-      if (emailIndex > 0) {
-        // Look for name before email
-        const beforeEmail = textContent.substring(0, emailIndex).trim();
-        if (beforeEmail && beforeEmail.length < 50) {
-          name = beforeEmail;
+      while (currentElement && searchDepth < maxDepth) {
+        // Look for common name patterns in the element
+        const elementText = currentElement.textContent || '';
+        const emailIndex = elementText.indexOf(email);
+        
+        if (emailIndex > 0) {
+          // Check text before email
+          const beforeEmail = elementText.substring(0, emailIndex).trim();
+          // Look for name patterns (2-4 words, no special chars)
+          const nameMatch = beforeEmail.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/);
+          if (nameMatch && nameMatch[1] && nameMatch[1].length < 50) {
+            name = nameMatch[1];
+            break;
+          }
         }
-      } else if (emailIndex >= 0 && emailIndex + email.length < textContent.length) {
-        // Look for name after email
-        const afterEmail = textContent.substring(emailIndex + email.length).trim();
-        if (afterEmail && afterEmail.length < 50 && !afterEmail.includes('@')) {
-          name = afterEmail.replace(/^[^\w]*/, '').replace(/[^\w]*$/, '');
-        }
+        
+        currentElement = currentElement.parentElement;
+        searchDepth++;
+      }
+    }
+    
+    // Clean up the name if found
+    if (name) {
+      // Remove extra whitespace and common prefixes/suffixes
+      name = name
+        .replace(/\s+/g, ' ') // Multiple spaces to single space
+        .replace(/^[^\w\s]*/, '') // Remove leading non-word chars
+        .replace(/[^\w\s]*$/, '') // Remove trailing non-word chars
+        .trim();
+      
+      // If name is too long or contains email-like content, discard it
+      if (name.length > 50 || name.includes('@') || name.includes('http')) {
+        name = '';
       }
     }
     
