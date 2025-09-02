@@ -449,27 +449,92 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     const pageSource = document.documentElement.outerHTML;
     
     // Look for Launch Team section and extract names from it
-    const launchTeamMatch = pageSource.match(/Launch Team.*?<\/div>/s);
+    // Try multiple patterns for different Product Hunt page structures
+    
+    // Pattern 1: Launch Team followed by content until next major section
+    let launchTeamMatch = pageSource.match(/Launch Team.*?(?=<(?:div|section)[^>]*(?:class|id)[^>]*(?:comment|review|similar|footer|bottom)|$)/si);
+    
+    // Pattern 2: More specific Launch Team / Built With pattern
+    if (!launchTeamMatch) {
+      launchTeamMatch = pageSource.match(/Launch Team.*?Built With.*?(?=<(?:div|section|h[1-6])[^>]*|$)/si);
+    }
+    
+    // Pattern 3: Just Launch Team section
+    if (!launchTeamMatch) {
+      launchTeamMatch = pageSource.match(/Launch Team.*?<\/div>/s);
+    }
+    
     if (launchTeamMatch) {
       const launchTeamSection = launchTeamMatch[0];
+      console.log('Launch Team section found:', launchTeamSection.substring(0, 500) + '...');
       
-      // Extract all names from alt attributes in the Launch Team section
+      // Method 1: Extract from alt attributes (for image-based names)
       const altMatches = launchTeamSection.match(/alt="([^"]+)"/g);
       if (altMatches) {
         for (const altMatch of altMatches) {
           const altName = altMatch.match(/alt="([^"]+)"/)[1];
           if (altName && altName !== 'undefined' && altName.trim() && altName.length > 1) {
-            // Check if this name might be associated with the clicked email
-            // Look for the email near this name in the page source
             const namePattern = altName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            
-            // Look for email and name within reasonable proximity (500 characters)
             const proximityPattern = new RegExp(`(?:${namePattern}[\\s\\S]{0,500}${emailPattern}|${emailPattern}[\\s\\S]{0,500}${namePattern})`, 'i');
             
             if (proximityPattern.test(pageSource)) {
               name = altName.trim();
-              break; // Use the first Launch Team member found
+              console.log('Found name from alt attribute:', name);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Method 2: Extract from href patterns like /@username
+      if (!name) {
+        const hrefMatches = launchTeamSection.match(/href="[^"]*\/@([^"\/]+)"/g);
+        if (hrefMatches) {
+          for (const hrefMatch of hrefMatches) {
+            const username = hrefMatch.match(/href="[^"]*\/@([^"\/]+)"/)[1];
+            if (username && username.trim() && username.length > 1) {
+              // Look for the actual name near this username
+              const usernamePattern = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              
+              // Find name associated with this username in the page
+              const nameNearUsernamePattern = new RegExp(`(?:>\\s*([^<]+)\\s*<[^>]*href="[^"]*\\/@${usernamePattern}"|href="[^"]*\\/@${usernamePattern}"[^>]*>\\s*([^<]+)\\s*<)`, 'i');
+              const nameMatch = pageSource.match(nameNearUsernamePattern);
+              
+              if (nameMatch) {
+                const foundName = (nameMatch[1] || nameMatch[2] || '').trim();
+                if (foundName && foundName.length > 1) {
+                  const proximityPattern = new RegExp(`(?:${foundName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]{0,500}${emailPattern}|${emailPattern}[\\s\\S]{0,500}${foundName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'i');
+                  
+                  if (proximityPattern.test(pageSource)) {
+                    name = foundName;
+                    console.log('Found name from username pattern:', name);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Method 3: Extract names from text content in Launch Team section
+      if (!name) {
+        // Look for common name patterns (First Last, First Middle Last)
+        const namePatterns = launchTeamSection.match(/\b[A-Z][a-z]+(?: [A-Z][a-z]*){1,3}\b/g);
+        if (namePatterns) {
+          for (const possibleName of namePatterns) {
+            if (possibleName && possibleName.trim() && possibleName.length > 3) {
+              const namePattern = possibleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const proximityPattern = new RegExp(`(?:${namePattern}[\\s\\S]{0,500}${emailPattern}|${emailPattern}[\\s\\S]{0,500}${namePattern})`, 'i');
+              
+              if (proximityPattern.test(pageSource)) {
+                name = possibleName.trim();
+                console.log('Found name from text pattern:', name);
+                break;
+              }
             }
           }
         }
@@ -478,6 +543,8 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     
     // 2. Fallback: Look for JSON patterns if Launch Team didn't yield results
     if (!name) {
+      console.log('Launch Team search failed, trying JSON patterns for email:', email);
+      
       // Look for JSON patterns where email and name are in the same object
       const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special regex chars
       
@@ -488,24 +555,44 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
       // Pattern 2: {"name":"[name]",...,"email":"[email]",...} - within same object, name first  
       const strictPattern2 = new RegExp(`\\{[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*\\}`, 'gi');
       
+      // Pattern 3: Look for Product Hunt specific patterns like user objects
+      const phUserPattern1 = new RegExp(`"user"\\s*:\\s*\\{[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*\\}`, 'gi');
+      const phUserPattern2 = new RegExp(`"user"\\s*:\\s*\\{[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*\\}`, 'gi');
+      
       // Find all matches and use the first valid one
       let matches = [];
       
-      // Collect matches from both patterns
+      // Collect matches from all patterns
       let match;
       while ((match = strictPattern1.exec(pageSource)) !== null) {
         matches.push(match[1]);
+        console.log('Found JSON match (pattern 1):', match[1]);
       }
       
-      // Reset regex index for second pattern
       strictPattern2.lastIndex = 0;
       while ((match = strictPattern2.exec(pageSource)) !== null) {
         matches.push(match[1]);
+        console.log('Found JSON match (pattern 2):', match[1]);
+      }
+      
+      phUserPattern1.lastIndex = 0;
+      while ((match = phUserPattern1.exec(pageSource)) !== null) {
+        matches.push(match[1]);
+        console.log('Found PH user match (pattern 1):', match[1]);
+      }
+      
+      phUserPattern2.lastIndex = 0;
+      while ((match = phUserPattern2.exec(pageSource)) !== null) {
+        matches.push(match[1]);
+        console.log('Found PH user match (pattern 2):', match[1]);
       }
       
       // Use the first valid name found
       if (matches.length > 0) {
         name = matches[0].trim();
+        console.log('Using JSON pattern name:', name);
+      } else {
+        console.log('No JSON patterns found for email:', email);
       }
     }
     
