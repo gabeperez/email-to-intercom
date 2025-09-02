@@ -452,15 +452,28 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     // or "name":"User Name","email":"user@example.com"
     const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special regex chars
     
-    // Pattern 1: "email":"[email]","name":"[name]"
+    // More precise patterns to find the exact JSON object containing both email and name
+    // Pattern 1: "email":"[email]" followed by "name":"[name]" within the same object
     const pattern1 = new RegExp(`"email"\\s*:\\s*"${emailPattern}"[^}]*?"name"\\s*:\\s*"([^"]+)"`, 'i');
-    const match1 = pageSource.match(pattern1);
     
-    // Pattern 2: "name":"[name]","email":"[email]" (reverse order)
+    // Pattern 2: "name":"[name]" followed by "email":"[email]" within the same object
     const pattern2 = new RegExp(`"name"\\s*:\\s*"([^"]+)"[^}]*?"email"\\s*:\\s*"${emailPattern}"`, 'i');
+    
+    // Pattern 3: Look for tighter coupling - within same JSON object (limited scope)
+    const pattern3 = new RegExp(`\\{[^}]*"email"\\s*:\\s*"${emailPattern}"[^}]*"name"\\s*:\\s*"([^"]+)"[^}]*\\}`, 'i');
+    const pattern4 = new RegExp(`\\{[^}]*"name"\\s*:\\s*"([^"]+)"[^}]*"email"\\s*:\\s*"${emailPattern}"[^}]*\\}`, 'i');
+    
+    // Try the more specific patterns first (within same object)
+    const match3 = pageSource.match(pattern3);
+    const match4 = pageSource.match(pattern4);
+    const match1 = pageSource.match(pattern1);
     const match2 = pageSource.match(pattern2);
     
-    if (match1 && match1[1]) {
+    if (match3 && match3[1]) {
+      name = match3[1].trim();
+    } else if (match4 && match4[1]) {
+      name = match4[1].trim();
+    } else if (match1 && match1[1]) {
       name = match1[1].trim();
     } else if (match2 && match2[1]) {
       name = match2[1].trim();
@@ -547,27 +560,44 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
   // Debounced version of makeEmailsClickable
   const debouncedMakeEmailsClickable = debounce(makeEmailsClickable, 300);
 
-  // Initialize extension after window load and a delay
-  window.addEventListener('load', function() {
-    setTimeout(() => {
-      console.log('Initializing Email to Intercom Linker');
-      
-      // Inject styles first
-      injectStyles();
-      
-      // Create email panel (but don't show it yet)
-      createEmailPanel();
-      
-      makeEmailsClickable();
+  // Function to initialize the extension
+  function initializeExtension() {
+    console.log('Initializing Email to Intercom Linker');
+    
+    // Inject styles first
+    injectStyles();
+    
+    // Create email panel (but don't show it yet)
+    createEmailPanel();
+    
+    makeEmailsClickable();
 
-      // Set up MutationObserver
-      const observer = new MutationObserver(mutations => {
-        if (mutations.some(mutation => mutation.type === 'childList' && mutation.addedNodes.length > 0)) {
-          debouncedMakeEmailsClickable();
-        }
-      });
+    // Set up MutationObserver
+    const observer = new MutationObserver(mutations => {
+      if (mutations.some(mutation => mutation.type === 'childList' && mutation.addedNodes.length > 0)) {
+        debouncedMakeEmailsClickable();
+      }
+    });
 
-      observer.observe(document.body, { childList: true, subtree: true });
-    }, 2000); // 2 second delay after window load
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // Multiple initialization strategies to handle different loading scenarios
+  if (document.readyState === 'loading') {
+    // Document is still loading
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(initializeExtension, 500);
+    });
+  } else if (document.readyState === 'interactive') {
+    // Document is done loading but resources may still be loading
+    setTimeout(initializeExtension, 1000);
+  } else {
+    // Document and resources are done loading
+    setTimeout(initializeExtension, 500);
+  }
+
+  // Also try after window load as final fallback
+  window.addEventListener('load', () => {
+    setTimeout(initializeExtension, 2000);
   });
 });
