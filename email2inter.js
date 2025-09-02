@@ -26,6 +26,252 @@ function matchesAllowedDomains(url, allowedDomains) {
   });
 }
 
+// Inject CSS styles
+function injectStyles() {
+  if (document.getElementById('email-intercom-styles')) return;
+  
+  const style = document.createElement('style');
+  style.id = 'email-intercom-styles';
+  style.textContent = `
+    /* Email Panel */
+    #email-intercom-panel {
+      position: fixed;
+      top: 0;
+      right: -400px;
+      width: 400px;
+      height: 100vh;
+      background: #ffffff;
+      border-left: 1px solid #e1e8ed;
+      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+      z-index: 9999;
+      transition: right 0.3s ease;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #email-intercom-panel.panel-visible {
+      right: 0;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      border-bottom: 1px solid #e1e8ed;
+      background: #f8f9fa;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .settings-btn {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: #666;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+
+    .settings-btn:hover {
+      background: #e1e8ed;
+      color: #333;
+      transform: scale(1.05);
+    }
+
+    .panel-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #666;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background 0.2s ease;
+    }
+
+    .close-btn:hover {
+      background: #e1e8ed;
+    }
+
+    .panel-content {
+      padding: 20px;
+      height: calc(100vh - 81px);
+      overflow-y: auto;
+    }
+
+    .recipient-info {
+      margin-bottom: 24px;
+    }
+
+    .info-item {
+      margin-bottom: 16px;
+    }
+
+    .info-item label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .info-item input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e1e8ed;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    .info-item input:focus {
+      outline: none;
+      border-color: #007bff;
+    }
+
+    .email-form {
+      margin-bottom: 20px;
+    }
+
+    .form-field {
+      margin-bottom: 20px;
+    }
+
+    .form-field label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .form-field input,
+    .form-field textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #e1e8ed;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s ease;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+
+    .form-field input:focus,
+    .form-field textarea:focus {
+      outline: none;
+      border-color: #007bff;
+    }
+
+    .form-field textarea {
+      min-height: 120px;
+      line-height: 1.5;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary {
+      background: #f8f9fa;
+      color: #666;
+      border: 1px solid #e1e8ed;
+    }
+
+    .btn-secondary:hover {
+      background: #e9ecef;
+    }
+
+    .btn-primary {
+      background: #007bff;
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #0056b3;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-loading {
+      color: #007bff;
+    }
+
+    .required {
+      color: #dc3545;
+    }
+
+    .email-status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .status-success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+
+    .status-error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+
+    /* Mobile Responsiveness */
+    @media (max-width: 480px) {
+      #email-intercom-panel {
+        width: 100%;
+        right: -100%;
+      }
+    }
+  `;
+  
+  document.head.appendChild(style);
+}
+
 chrome.storage.local.get(['allowedDomains'], function(result) {
   if (chrome.runtime.lastError) {
     console.error('Chrome runtime error:', chrome.runtime.lastError);
@@ -46,25 +292,188 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
   // Set to keep track of processed nodes
   const processedNodes = new WeakSet();
 
-  // Function to open email composer popup
-  function openEmailComposer(email, name = '') {
-    const popupUrl = chrome.runtime.getURL('email-composer.html');
-    const params = new URLSearchParams({ email: email });
-    if (name) params.append('name', name);
+  // Create email panel
+  function createEmailPanel() {
+    if (document.getElementById('email-intercom-panel')) return;
     
-    const fullUrl = `${popupUrl}?${params.toString()}`;
+    const panel = document.createElement('div');
+    panel.id = 'email-intercom-panel';
+    panel.innerHTML = `
+      <div class="panel-header">
+        <h3>📧 Send Email via Intercom</h3>
+        <div class="header-actions">
+          <button class="settings-btn" id="email-settings-btn" title="Settings">⚙️</button>
+          <button class="close-btn" id="email-close-panel">✕</button>
+        </div>
+      </div>
+      
+      <div class="panel-content">
+        <div class="recipient-info" id="recipient-info">
+          <div class="info-item">
+            <label>To Email:</label>
+            <input type="email" id="email-recipient-email" placeholder="recipient@example.com" readonly>
+          </div>
+          <div class="info-item">
+            <label>Recipient Name:</label>
+            <input type="text" id="email-recipient-name" placeholder="Optional">
+          </div>
+        </div>
+        
+        <div class="email-form">
+          <div class="form-field">
+            <label>Subject <span class="required">*</span></label>
+            <input type="text" id="email-subject" placeholder="Enter email subject" required>
+          </div>
+          
+          <div class="form-field">
+            <label>Message <span class="required">*</span></label>
+            <textarea id="email-message" rows="8" placeholder="Enter your message..." required></textarea>
+          </div>
+          
+          <div class="form-actions">
+            <button class="btn btn-secondary" id="email-cancel-btn">Cancel</button>
+            <button class="btn btn-primary" id="email-send-btn">
+              <span class="btn-text">Send Email</span>
+              <span class="btn-loading" style="display:none;">Sending...</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="email-status" id="email-status" style="display:none;"></div>
+      </div>
+    `;
     
-    // Create popup window
-    const popup = window.open(
-      fullUrl,
-      'emailComposer',
-      'width=450,height=500,scrollbars=yes,resizable=yes,status=no,location=no,toolbar=no,menubar=no'
-    );
+    document.body.appendChild(panel);
     
-    // Focus the popup if it was created successfully
-    if (popup) {
-      popup.focus();
+    // Add event listeners
+    document.getElementById('email-close-panel').addEventListener('click', hideEmailPanel);
+    document.getElementById('email-settings-btn').addEventListener('click', openSettings);
+    document.getElementById('email-cancel-btn').addEventListener('click', hideEmailPanel);
+    document.getElementById('email-send-btn').addEventListener('click', sendEmail);
+  }
+
+  // Show email panel
+  function showEmailPanel() {
+    if (!document.getElementById('email-intercom-panel')) {
+      createEmailPanel();
     }
+    document.getElementById('email-intercom-panel').classList.add('panel-visible');
+  }
+
+  // Hide email panel
+  function hideEmailPanel() {
+    const panel = document.getElementById('email-intercom-panel');
+    if (panel) panel.classList.remove('panel-visible');
+  }
+
+  // Open settings
+  function openSettings() {
+    chrome.runtime.sendMessage({ action: 'openOptionsPage' });
+  }
+
+  // Send email
+  async function sendEmail() {
+    const sendBtn = document.getElementById('email-send-btn');
+    const btnText = sendBtn.querySelector('.btn-text');
+    const btnLoading = sendBtn.querySelector('.btn-loading');
+    const statusDiv = document.getElementById('email-status');
+    
+    const data = {
+      toEmail: document.getElementById('email-recipient-email').value.trim(),
+      toName: document.getElementById('email-recipient-name').value.trim() || null,
+      subject: document.getElementById('email-subject').value.trim(),
+      htmlBody: `<p>${document.getElementById('email-message').value.trim().replace(/\n/g, '</p><p>')}</p>`,
+      openConversation: true
+    };
+    
+    if (!data.toEmail || !data.subject || !data.htmlBody) {
+      showStatus('Please fill in all required fields', 'error');
+      return;
+    }
+    
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+    sendBtn.disabled = true;
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'sendEmail',
+        data: data
+      });
+      
+      if (response.success) {
+        showStatus(`✅ Email sent successfully! Message ID: ${response.messageId}`, 'success');
+        
+        // Clear form
+        document.getElementById('email-subject').value = '';
+        document.getElementById('email-message').value = '';
+        
+        // Auto-close after success
+        setTimeout(() => {
+          hideEmailPanel();
+        }, 2000);
+      } else {
+        throw new Error(response.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      showStatus(`❌ Failed to send email: ${error.message}`, 'error');
+    } finally {
+      btnText.style.display = 'inline';
+      btnLoading.style.display = 'none';
+      sendBtn.disabled = false;
+    }
+  }
+
+  // Show status message
+  function showStatus(message, type) {
+    const statusDiv = document.getElementById('email-status');
+    if (!statusDiv) return;
+    statusDiv.textContent = message;
+    statusDiv.className = `email-status status-${type}`;
+    statusDiv.style.display = 'block';
+    if (type === 'success') {
+      setTimeout(() => { statusDiv.style.display = 'none'; }, 5000);
+    }
+  }
+
+  // Function to handle email click
+  function handleEmailClick(e, email) {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent event bubbling
+    
+    // Try to extract name from nearby text (look for common patterns)
+    let name = '';
+    const parentElement = e.target.parentElement;
+    if (parentElement) {
+      // Look for name patterns like "John Doe <john@example.com>" or "john@example.com (John Doe)"
+      const textContent = parentElement.textContent;
+      const emailIndex = textContent.indexOf(email);
+      
+      if (emailIndex > 0) {
+        // Look for name before email
+        const beforeEmail = textContent.substring(0, emailIndex).trim();
+        if (beforeEmail && beforeEmail.length < 50) {
+          name = beforeEmail;
+        }
+      } else if (emailIndex >= 0 && emailIndex + email.length < textContent.length) {
+        // Look for name after email
+        const afterEmail = textContent.substring(emailIndex + email.length).trim();
+        if (afterEmail && afterEmail.length < 50 && !afterEmail.includes('@')) {
+          name = afterEmail.replace(/^[^\w]*/, '').replace(/[^\w]*$/, '');
+        }
+      }
+    }
+    
+    // Populate and show email panel
+    if (!document.getElementById('email-intercom-panel')) {
+      createEmailPanel();
+    }
+    
+    document.getElementById('email-recipient-email').value = email;
+    document.getElementById('email-recipient-name').value = name;
+    
+    showEmailPanel();
   }
 
   // Function to make emails clickable
@@ -105,38 +514,6 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     }
   }
 
-  // Function to handle email click
-  function handleEmailClick(e, email) {
-    e.preventDefault();
-    e.stopPropagation(); // Prevent event bubbling
-    
-    // Try to extract name from nearby text (look for common patterns)
-    let name = '';
-    const parentElement = e.target.parentElement;
-    if (parentElement) {
-      // Look for name patterns like "John Doe <john@example.com>" or "john@example.com (John Doe)"
-      const textContent = parentElement.textContent;
-      const emailIndex = textContent.indexOf(email);
-      
-      if (emailIndex > 0) {
-        // Look for name before email
-        const beforeEmail = textContent.substring(0, emailIndex).trim();
-        if (beforeEmail && beforeEmail.length < 50) {
-          name = beforeEmail;
-        }
-      } else if (emailIndex >= 0 && emailIndex + email.length < textContent.length) {
-        // Look for name after email
-        const afterEmail = textContent.substring(emailIndex + email.length).trim();
-        if (afterEmail && afterEmail.length < 50 && !afterEmail.includes('@')) {
-          name = afterEmail.replace(/^[^\w]*/, '').replace(/[^\w]*$/, '');
-        }
-      }
-    }
-    
-    // Open email composer popup
-    openEmailComposer(email, name);
-  }
-
   // Debounce function
   function debounce(func, wait) {
     let timeout;
@@ -153,6 +530,13 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
   window.addEventListener('load', function() {
     setTimeout(() => {
       console.log('Initializing Email to Intercom Linker');
+      
+      // Inject styles first
+      injectStyles();
+      
+      // Create email panel (but don't show it yet)
+      createEmailPanel();
+      
       makeEmailsClickable();
 
       // Set up MutationObserver
