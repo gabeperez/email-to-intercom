@@ -2,14 +2,17 @@
     "manifest_version": 3,
     "name": "Email to Intercom Linker",
     "version": "1.0",
-    "description": "Makes email addresses clickable and opens Intercom search for the clicked email.",
+    "description": "Makes email addresses clickable and sends emails via Intercom when clicked.",
     "permissions": [
         "activeTab",
         "storage",
         "tabs"
     ],
     "host_permissions": [
-        "https://app.intercom.io/*"
+        "https://app.intercom.io/*",
+        "https://api.intercom.io/*",
+        "https://api.eu.intercom.io/*",
+        "https://api.au.intercom.io/*"
     ],
     "action": {
         "default_popup": "popup.html"
@@ -24,5 +27,6 @@
             ],
             "js": ["email2inter.js"]
         }
-    ]
+    ],
+    "options_page": "options.html"
 }

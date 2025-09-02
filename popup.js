@@ -1,50 +1,50 @@
 document.addEventListener('DOMContentLoaded', function() {
-  const saveButton = document.getElementById('saveButton');
-  const appCodeInput = document.getElementById('appCodeInput');
+  const openOptionsBtn = document.getElementById('openOptionsBtn');
+  const testConnectionBtn = document.getElementById('testConnectionBtn');
   const statusElement = document.getElementById('status');
-  const allowedDomainsInput = document.getElementById('allowedDomainsInput');
 
-  // Load saved app code if it exists
-  try {
-    chrome.storage.local.get(['intercomAppCode', 'allowedDomains'], function(result) {
-      if (chrome.runtime.lastError) {
-        console.error('Chrome runtime error:', chrome.runtime.lastError);
-        return;
-      }
-      if (result.intercomAppCode) {
-        appCodeInput.value = result.intercomAppCode;
-      }
-      if (result.allowedDomains && Array.isArray(result.allowedDomains)) {
-        allowedDomainsInput.value = result.allowedDomains.join('\n');
-      }
-    });
-  } catch (error) {
-    console.error('Error accessing chrome API:', error);
-  }
+  // Open options page
+  openOptionsBtn.addEventListener('click', function() {
+    chrome.runtime.openOptionsPage();
+  });
 
-  saveButton.addEventListener('click', function() {
-    const appCode = appCodeInput.value.trim();
-    const allowedDomains = allowedDomainsInput.value
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
-    if (appCode) {
-      try {
-        chrome.storage.local.set({intercomAppCode: appCode, allowedDomains: allowedDomains}, function() {
-          if (chrome.runtime.lastError) {
-            statusElement.textContent = 'Error saving settings. Please try again.';
-            console.error('Chrome runtime error:', chrome.runtime.lastError);
-          } else {
-            statusElement.textContent = 'Settings saved successfully!';
-            setTimeout(() => { window.close(); }, 1500);
-          }
-        });
-      } catch (error) {
-        console.error('Error accessing chrome API:', error);
-        statusElement.textContent = 'Error saving settings. Please try again.';
+  // Test Intercom connection
+  testConnectionBtn.addEventListener('click', async function() {
+    const testBtn = testConnectionBtn;
+    const originalText = testBtn.textContent;
+    
+    testBtn.disabled = true;
+    testBtn.textContent = 'Testing...';
+    
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'testConnection' });
+      
+      if (response.success) {
+        showStatus(`Connected successfully as ${response.admin.name} (${response.admin.email})`, 'success');
+      } else {
+        throw new Error(response.error);
       }
-    } else {
-      statusElement.textContent = 'Please enter a valid app code.';
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      
+      if (error.message.includes('credentials not configured')) {
+        showStatus('Please configure Intercom credentials in Settings first', 'error');
+      } else {
+        showStatus('Connection failed: ' + error.message, 'error');
+      }
+    } finally {
+      testBtn.disabled = false;
+      testBtn.textContent = originalText;
     }
   });
+
+  function showStatus(message, type) {
+    statusElement.textContent = message;
+    statusElement.className = `status ${type}`;
+    statusElement.style.display = 'block';
+    
+    if (type === 'success') {
+      setTimeout(() => statusElement.style.display = 'none', 5000);
+    }
+  }
 });
