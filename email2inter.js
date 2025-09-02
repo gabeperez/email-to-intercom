@@ -445,9 +445,14 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     // Try to extract name from multiple sources
     let name = '';
     
-    // 1. Check for tooltip data (title attribute)
+    // 1. Check for original tooltip data (stored before we modified it)
     const target = e.target;
-    if (target.title && target.title.trim() && !target.title.includes('@')) {
+    if (target.dataset.originalTooltip && target.dataset.originalTooltip.trim()) {
+      name = target.dataset.originalTooltip.trim();
+    }
+    
+    // 1b. Check for current tooltip data (title attribute) as fallback
+    if (!name && target.title && target.title.trim() && !target.title.includes('@') && !target.title.includes('Intercom')) {
       name = target.title.trim();
     }
     
@@ -570,6 +575,18 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         link.href = '#';
         link.textContent = match[0];
         link.style.cssText = 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500;';
+        
+        // Store original tooltip/title from parent element before we override it
+        let originalTooltip = '';
+        if (node.parentNode && node.parentNode.title) {
+          originalTooltip = node.parentNode.title;
+        }
+        
+        // Store original tooltip as a data attribute for later retrieval
+        if (originalTooltip && !originalTooltip.includes('@')) {
+          link.dataset.originalTooltip = originalTooltip;
+        }
+        
         link.title = "Click to send email via Intercom";
         link.addEventListener('click', (e) => handleEmailClick(e, match[0]));
         fragment.appendChild(link);
