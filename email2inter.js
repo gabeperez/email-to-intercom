@@ -442,107 +442,45 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     e.preventDefault();
     e.stopPropagation(); // Prevent event bubbling
     
-    // Try to extract name from multiple sources
     let name = '';
+    let messagePrefix = '';
     
-    // 0. First priority: Check meta author tag in document head
-    const metaAuthor = document.querySelector('meta[name="author"]');
-    if (metaAuthor && metaAuthor.content && metaAuthor.content.trim()) {
-      name = metaAuthor.content.trim();
+    // 1. First, look for JSON pattern with email and name in page source
+    const pageSource = document.documentElement.outerHTML;
+    
+    // Look for patterns like "email":"user@example.com","name":"User Name"
+    // or "name":"User Name","email":"user@example.com"
+    const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special regex chars
+    
+    // Pattern 1: "email":"[email]","name":"[name]"
+    const pattern1 = new RegExp(`"email"\\s*:\\s*"${emailPattern}"[^}]*?"name"\\s*:\\s*"([^"]+)"`, 'i');
+    const match1 = pageSource.match(pattern1);
+    
+    // Pattern 2: "name":"[name]","email":"[email]" (reverse order)
+    const pattern2 = new RegExp(`"name"\\s*:\\s*"([^"]+)"[^}]*?"email"\\s*:\\s*"${emailPattern}"`, 'i');
+    const match2 = pageSource.match(pattern2);
+    
+    if (match1 && match1[1]) {
+      name = match1[1].trim();
+    } else if (match2 && match2[1]) {
+      name = match2[1].trim();
     }
     
-    // 1. Check for original tooltip data (stored before we modified it)
-    const target = e.target;
-    if (!name && target.dataset.originalTooltip && target.dataset.originalTooltip.trim()) {
-      name = target.dataset.originalTooltip.trim();
-    }
-    
-    // 1b. Check for current tooltip data (title attribute) as fallback
-    if (!name && target.title && target.title.trim() && !target.title.includes('@') && !target.title.includes('Intercom')) {
-      name = target.title.trim();
-    }
-    
-    // 2. Check for data attributes that might contain name
-    if (!name && target.dataset) {
-      const possibleNameFields = ['name', 'fullname', 'fullName', 'userName', 'username', 'displayName'];
-      for (const field of possibleNameFields) {
-        if (target.dataset[field] && target.dataset[field].trim()) {
-          name = target.dataset[field].trim();
-          break;
-        }
-      }
-    }
-    
-    // 3. Check for aria-label (accessibility attribute)
-    if (!name && target.getAttribute('aria-label')) {
-      const ariaLabel = target.getAttribute('aria-label').trim();
-      if (ariaLabel && !ariaLabel.includes('@')) {
-        name = ariaLabel;
-      }
-    }
-    
-    // 4. Look for name in nearby text (existing logic)
+    // 2. Fallback to meta author tag if no JSON pattern found
     if (!name) {
-      const parentElement = e.target.parentElement;
-      if (parentElement) {
-        const textContent = parentElement.textContent;
-        const emailIndex = textContent.indexOf(email);
-        
-        if (emailIndex > 0) {
-          // Look for name before email
-          const beforeEmail = textContent.substring(0, emailIndex).trim();
-          if (beforeEmail && beforeEmail.length < 50 && !beforeEmail.includes('@')) {
-            name = beforeEmail;
-          }
-        } else if (emailIndex >= 0 && emailIndex + email.length < textContent.length) {
-          // Look for name after email
-          const afterEmail = textContent.substring(emailIndex + email.length).trim();
-          if (afterEmail && afterEmail.length < 50 && !afterEmail.includes('@')) {
-            name = afterEmail.replace(/^[^\w\s]*/, '').replace(/[^\w\s]*$/, '');
-          }
-        }
+      const metaAuthor = document.querySelector('meta[name="author"]');
+      if (metaAuthor && metaAuthor.content && metaAuthor.content.trim()) {
+        name = metaAuthor.content.trim();
       }
     }
     
-    // 5. Look for name in parent elements (broader search)
-    if (!name) {
-      let currentElement = e.target.parentElement;
-      let searchDepth = 0;
-      const maxDepth = 3; // Don't go too deep in the DOM
-      
-      while (currentElement && searchDepth < maxDepth) {
-        // Look for common name patterns in the element
-        const elementText = currentElement.textContent || '';
-        const emailIndex = elementText.indexOf(email);
-        
-        if (emailIndex > 0) {
-          // Check text before email
-          const beforeEmail = elementText.substring(0, emailIndex).trim();
-          // Look for name patterns (2-4 words, no special chars)
-          const nameMatch = beforeEmail.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})$/);
-          if (nameMatch && nameMatch[1] && nameMatch[1].length < 50) {
-            name = nameMatch[1];
-            break;
-          }
-        }
-        
-        currentElement = currentElement.parentElement;
-        searchDepth++;
-      }
-    }
-    
-    // Clean up the name if found
+    // Extract first name for greeting if name was found
     if (name) {
-      // Remove extra whitespace and common prefixes/suffixes
-      name = name
-        .replace(/\s+/g, ' ') // Multiple spaces to single space
-        .replace(/^[^\w\s]*/, '') // Remove leading non-word chars
-        .replace(/[^\w\s]*$/, '') // Remove trailing non-word chars
-        .trim();
-      
-      // If name is too long or contains email-like content, discard it
-      if (name.length > 50 || name.includes('@') || name.includes('http')) {
-        name = '';
+      // Clean up name (remove things like "(@username)" from "Gabe Perez (@gabe)")
+      const cleanName = name.replace(/\s*\([^)]*\).*$/, '').trim();
+      const firstName = cleanName.split(' ')[0];
+      if (firstName) {
+        messagePrefix = `Hi ${firstName},\n\n`;
       }
     }
     
@@ -553,6 +491,7 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     
     document.getElementById('email-recipient-email').value = email;
     document.getElementById('email-recipient-name').value = name;
+    document.getElementById('email-message').value = messagePrefix;
     
     showEmailPanel();
   }
@@ -581,17 +520,6 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         link.href = '#';
         link.textContent = match[0];
         link.style.cssText = 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500;';
-        
-        // Store original tooltip/title from parent element before we override it
-        let originalTooltip = '';
-        if (node.parentNode && node.parentNode.title) {
-          originalTooltip = node.parentNode.title;
-        }
-        
-        // Store original tooltip as a data attribute for later retrieval
-        if (originalTooltip && !originalTooltip.includes('@')) {
-          link.dataset.originalTooltip = originalTooltip;
-        }
         
         link.title = "Click to send email via Intercom";
         link.addEventListener('click', (e) => handleEmailClick(e, match[0]));
