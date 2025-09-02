@@ -445,9 +445,15 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     // Try to extract name from multiple sources
     let name = '';
     
+    // 0. First priority: Check meta author tag in document head
+    const metaAuthor = document.querySelector('meta[name="author"]');
+    if (metaAuthor && metaAuthor.content && metaAuthor.content.trim()) {
+      name = metaAuthor.content.trim();
+    }
+    
     // 1. Check for original tooltip data (stored before we modified it)
     const target = e.target;
-    if (target.dataset.originalTooltip && target.dataset.originalTooltip.trim()) {
+    if (!name && target.dataset.originalTooltip && target.dataset.originalTooltip.trim()) {
       name = target.dataset.originalTooltip.trim();
     }
     
