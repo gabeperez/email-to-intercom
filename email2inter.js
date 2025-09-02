@@ -445,47 +445,72 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     let name = '';
     let messagePrefix = '';
     
-    // 1. First, look for JSON pattern with email and name in page source
+    // 1. First, check if email is associated with Launch Team members
     const pageSource = document.documentElement.outerHTML;
     
-    // Look for patterns like "email":"user@example.com","name":"User Name"
-    // or "name":"User Name","email":"user@example.com"
-    const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special regex chars
-    
-    // More precise patterns to find the exact JSON object containing both email and name
-    // Pattern 1: "email":"[email]" followed by "name":"[name]" within the same object
-    const pattern1 = new RegExp(`"email"\\s*:\\s*"${emailPattern}"[^}]*?"name"\\s*:\\s*"([^"]+)"`, 'i');
-    
-    // Pattern 2: "name":"[name]" followed by "email":"[email]" within the same object
-    const pattern2 = new RegExp(`"name"\\s*:\\s*"([^"]+)"[^}]*?"email"\\s*:\\s*"${emailPattern}"`, 'i');
-    
-    // Pattern 3: Look for tighter coupling - within same JSON object (limited scope)
-    const pattern3 = new RegExp(`\\{[^}]*"email"\\s*:\\s*"${emailPattern}"[^}]*"name"\\s*:\\s*"([^"]+)"[^}]*\\}`, 'i');
-    const pattern4 = new RegExp(`\\{[^}]*"name"\\s*:\\s*"([^"]+)"[^}]*"email"\\s*:\\s*"${emailPattern}"[^}]*\\}`, 'i');
-    
-    // Try the more specific patterns first (within same object)
-    const match3 = pageSource.match(pattern3);
-    const match4 = pageSource.match(pattern4);
-    const match1 = pageSource.match(pattern1);
-    const match2 = pageSource.match(pattern2);
-    
-    if (match3 && match3[1]) {
-      name = match3[1].trim();
-    } else if (match4 && match4[1]) {
-      name = match4[1].trim();
-    } else if (match1 && match1[1]) {
-      name = match1[1].trim();
-    } else if (match2 && match2[1]) {
-      name = match2[1].trim();
-    }
-    
-    // 2. Fallback to meta author tag if no JSON pattern found
-    if (!name) {
-      const metaAuthor = document.querySelector('meta[name="author"]');
-      if (metaAuthor && metaAuthor.content && metaAuthor.content.trim()) {
-        name = metaAuthor.content.trim();
+    // Look for Launch Team section and extract names from it
+    const launchTeamMatch = pageSource.match(/Launch Team.*?<\/div>/s);
+    if (launchTeamMatch) {
+      const launchTeamSection = launchTeamMatch[0];
+      
+      // Extract all names from alt attributes in the Launch Team section
+      const altMatches = launchTeamSection.match(/alt="([^"]+)"/g);
+      if (altMatches) {
+        for (const altMatch of altMatches) {
+          const altName = altMatch.match(/alt="([^"]+)"/)[1];
+          if (altName && altName !== 'undefined' && altName.trim() && altName.length > 1) {
+            // Check if this name might be associated with the clicked email
+            // Look for the email near this name in the page source
+            const namePattern = altName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            // Look for email and name within reasonable proximity (500 characters)
+            const proximityPattern = new RegExp(`(?:${namePattern}[\\s\\S]{0,500}${emailPattern}|${emailPattern}[\\s\\S]{0,500}${namePattern})`, 'i');
+            
+            if (proximityPattern.test(pageSource)) {
+              name = altName.trim();
+              break; // Use the first Launch Team member found
+            }
+          }
+        }
       }
     }
+    
+    // 2. Fallback: Look for JSON patterns if Launch Team didn't yield results
+    if (!name) {
+      // Look for JSON patterns where email and name are in the same object
+      const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special regex chars
+      
+      // Most specific patterns: look for complete JSON objects with both email and name
+      // Pattern 1: {"email":"[email]",...,"name":"[name]",...} - within same object, email first
+      const strictPattern1 = new RegExp(`\\{[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*\\}`, 'gi');
+      
+      // Pattern 2: {"name":"[name]",...,"email":"[email]",...} - within same object, name first  
+      const strictPattern2 = new RegExp(`\\{[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*\\}`, 'gi');
+      
+      // Find all matches and use the first valid one
+      let matches = [];
+      
+      // Collect matches from both patterns
+      let match;
+      while ((match = strictPattern1.exec(pageSource)) !== null) {
+        matches.push(match[1]);
+      }
+      
+      // Reset regex index for second pattern
+      strictPattern2.lastIndex = 0;
+      while ((match = strictPattern2.exec(pageSource)) !== null) {
+        matches.push(match[1]);
+      }
+      
+      // Use the first valid name found
+      if (matches.length > 0) {
+        name = matches[0].trim();
+      }
+    }
+    
+    // No fallback - leave name empty if JSON pattern not found
+    // This ensures we only use names that are directly associated with the clicked email
     
     // Extract first name for greeting if name was found
     if (name) {
