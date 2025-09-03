@@ -551,6 +551,13 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
   function extractNameFromModeratorInterface(email) {
     console.log('Searching moderator interface for name...');
     
+    // NEW: Product Hunt Launch Team Matching (HIGHEST PRIORITY)
+    const launchTeamName = extractNameFromLaunchTeam(email);
+    if (launchTeamName) {
+      console.log('Found name from Launch Team matching:', launchTeamName);
+      return launchTeamName;
+    }
+    
     // Find the email element
     const emailElements = document.querySelectorAll('a[href*="mailto"], a[title*="email"], *');
     let emailElement = null;
@@ -651,6 +658,90 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     return null;
   }
 
+  // NEW: Extract name by matching email with Launch Team members
+  function extractNameFromLaunchTeam(email) {
+    console.log('Searching Launch Team for email match...');
+    
+    // Look for "Launch Team" or "Built With" sections
+    const launchSections = document.querySelectorAll('*');
+    let launchTeamSection = null;
+    
+    for (const element of launchSections) {
+      const text = element.textContent;
+      if ((text.includes('Launch Team') || text.includes('Built With')) && 
+          text.length < 500) { // Avoid getting huge sections
+        launchTeamSection = element;
+        console.log('Found Launch Team section:', element);
+        break;
+      }
+    }
+    
+    if (launchTeamSection) {
+      // Get all team member names from the launch team section
+      const teamNames = [];
+      const nameElements = launchTeamSection.querySelectorAll('*');
+      
+      for (const element of nameElements) {
+        const text = element.textContent.trim();
+        // Look for names (2-3 words, properly capitalized, reasonable length)
+        if (/^[A-Z][a-z]+(?: [A-Z][a-z]+){1,2}$/.test(text) && 
+            text.length >= 4 && text.length <= 50 &&
+            !text.includes('@') && 
+            !text.includes('Team') &&
+            !text.includes('Show') &&
+            !text.includes('more')) {
+          teamNames.push(text);
+          console.log('Found team member name:', text);
+        }
+      }
+      
+      console.log('All team member names found:', teamNames);
+      
+      // Extract the main part of the email (before @ and common suffixes)
+      const emailUser = email.split('@')[0].toLowerCase();
+      console.log('Email username to match:', emailUser);
+      
+      // Try to match team names with email
+      for (const teamName of teamNames) {
+        const firstName = teamName.split(' ')[0].toLowerCase();
+        const lastName = teamName.split(' ')[1]?.toLowerCase() || '';
+        
+        console.log(`Checking team member: ${teamName} (${firstName}, ${lastName})`);
+        
+        // Method 1: First name match
+        if (emailUser.includes(firstName) && firstName.length >= 3) {
+          console.log(`✅ First name match: ${firstName} found in ${emailUser}`);
+          return teamName;
+        }
+        
+        // Method 2: Last name match
+        if (lastName && emailUser.includes(lastName) && lastName.length >= 3) {
+          console.log(`✅ Last name match: ${lastName} found in ${emailUser}`);
+          return teamName;
+        }
+        
+        // Method 3: Combined name match (e.g., "jackyzheng" matches "Jacky Zheng")
+        const combinedName = (firstName + lastName).toLowerCase();
+        if (combinedName.length >= 6 && emailUser.includes(combinedName)) {
+          console.log(`✅ Combined name match: ${combinedName} found in ${emailUser}`);
+          return teamName;
+        }
+        
+        // Method 4: Initials + last name (e.g., "jzheng" matches "Jacky Zheng")
+        if (lastName && firstName.length >= 1 && lastName.length >= 3) {
+          const initialsLastName = (firstName[0] + lastName).toLowerCase();
+          if (emailUser.includes(initialsLastName)) {
+            console.log(`✅ Initials + last name match: ${initialsLastName} found in ${emailUser}`);
+            return teamName;
+          }
+        }
+      }
+    }
+    
+    console.log('No Launch Team name matches found');
+    return null;
+  }
+
   // Method 2: Extract name from general page context (JSON patterns)
   function extractNameFromPageContext(email) {
     console.log('Searching general page context...');
@@ -716,48 +807,85 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     return null;
   }
 
-  // Method 4: Extract name from email username
+  // Method 4: Extract name from email username (ENHANCED)
   function extractNameFromEmailUsername(email) {
     console.log('Extracting name from email username...');
     
-    const username = email.split('@')[0];
+    let username = email.split('@')[0].toLowerCase();
+    console.log('Original username:', username);
     
-    // Handle common patterns like "jacky.business" or "jackybusiness"
-    let nameParts = [];
+    // Remove common business/domain suffixes first
+    const businessSuffixes = [
+      'business', 'biz', 'company', 'corp', 'inc', 'llc', 'ltd', 'co',
+      'studio', 'design', 'dev', 'tech', 'app', 'web', 'digital', 'media',
+      'marketing', 'consulting', 'solutions', 'services', 'group', 'team',
+      'agency', 'creative', 'labs', 'works', 'pro', 'plus', 'official'
+    ];
     
-    if (username.includes('.')) {
-      nameParts = username.split('.');
-    } else if (username.includes('_')) {
-      nameParts = username.split('_');
-    } else {
-      // Try to split camelCase or find word boundaries
-      const camelSplit = username.split(/(?=[A-Z])/);
-      if (camelSplit.length > 1) {
-        nameParts = camelSplit;
-      } else {
-        // Look for common business suffixes
-        const businessSuffixes = ['business', 'co', 'company', 'corp', 'inc', 'llc'];
-        let cleanUsername = username;
-        
-        for (const suffix of businessSuffixes) {
-          if (username.toLowerCase().endsWith(suffix)) {
-            cleanUsername = username.slice(0, -suffix.length);
-            break;
-          }
-        }
-        
-        nameParts = [cleanUsername];
+    // Remove business suffixes (with dot separation awareness)
+    for (const suffix of businessSuffixes) {
+      // Remove suffix if it's at the end with a dot (e.g., "jacky.business")
+      if (username.endsWith('.' + suffix)) {
+        username = username.slice(0, -(suffix.length + 1));
+        console.log(`Removed business suffix ".${suffix}":`, username);
+        break;
+      }
+      // Remove suffix if it's at the end without dot (e.g., "jackybusiness")
+      else if (username.endsWith(suffix) && username.length > suffix.length + 2) {
+        username = username.slice(0, -suffix.length);
+        console.log(`Removed business suffix "${suffix}":`, username);
+        break;
       }
     }
     
-    // Capitalize and clean parts
-    const name = nameParts
-      .filter(part => part && part.length > 1)
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(' ');
+    // Remove numbers at the end (e.g., "jacky123" -> "jacky")
+    username = username.replace(/\d+$/, '');
+    console.log('After removing numbers:', username);
     
-    console.log('Generated name from email username:', name);
-    return name || null;
+    // Now extract meaningful name parts
+    let nameParts = [];
+    
+    if (username.includes('.')) {
+      // Split by dots (e.g., "john.smith")
+      nameParts = username.split('.');
+    } else if (username.includes('_')) {
+      // Split by underscores (e.g., "john_smith")
+      nameParts = username.split('_');
+    } else if (username.includes('-')) {
+      // Split by hyphens (e.g., "john-smith")
+      nameParts = username.split('-');
+    } else {
+      // Try to detect camelCase (e.g., "johnSmith")
+      const camelSplit = username.split(/(?=[A-Z])/);
+      if (camelSplit.length > 1 && camelSplit.every(part => part.length > 0)) {
+        nameParts = camelSplit;
+      } else {
+        // Single word - keep as is if it looks like a name
+        if (username.length >= 2 && username.length <= 15 && /^[a-z]+$/.test(username)) {
+          nameParts = [username];
+        } else {
+          console.log('Username does not look like a name, skipping');
+          return null;
+        }
+      }
+    }
+    
+    // Filter and clean name parts
+    const cleanParts = nameParts
+      .filter(part => part && part.length >= 2) // At least 2 characters
+      .filter(part => /^[a-z]+$/i.test(part)) // Only letters
+      .filter(part => !businessSuffixes.includes(part.toLowerCase())) // No remaining business terms
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase());
+    
+    // Only return if we have 1-2 reasonable name parts
+    if (cleanParts.length >= 1 && cleanParts.length <= 2) {
+      const name = cleanParts.join(' ');
+      console.log('Generated smart name from email username:', name);
+      return name;
+    }
+    
+    console.log('Could not extract meaningful name from username');
+    return null;
   }
 
   // Method 5: Extract name from alt attributes
