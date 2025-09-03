@@ -643,6 +643,45 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         /Profile:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g
       ];
       
+      // SPECIAL: Product Hunt specific patterns for product pages
+      const phProductPatterns = [
+        // Pattern: "Hunter [Name] [email]" - this is what we see on the Receiptor AI page
+        /Hunter\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+[\w.+-]+@[\w.-]+/g,
+        
+        // Pattern: "Maker [Name] [email]"
+        /Maker\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+[\w.+-]+@[\w.-]+/g,
+        
+        // Pattern: "Built by [Name]"
+        /Built by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g,
+        
+        // Pattern: "Created by [Name]"
+        /Created by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g
+      ];
+      
+      console.log('🔍 Looking for Product Hunt product page patterns...');
+      
+      // First try Product Hunt specific patterns
+      const pageText = document.body.textContent;
+      
+      for (const pattern of phProductPatterns) {
+        const matches = pageText.match(pattern);
+        if (matches) {
+          for (const match of matches) {
+            const nameMatch = match.match(pattern.source.replace(/\\/g, ''));
+            if (nameMatch && nameMatch[1]) {
+              const foundName = nameMatch[1].trim();
+              
+              // Validate it's a real person name
+              if (isValidPersonName(foundName)) {
+                console.log('✅ Found name from PH product pattern:', foundName);
+                console.log('   Pattern matched:', match);
+                return foundName;
+              }
+            }
+          }
+        }
+      }
+      
       // Search in the entire page text
       const pageText = document.body.textContent;
       
@@ -725,10 +764,17 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         }
       }
       
+      console.log('🔍 Found', emailElements.length, 'elements containing the email');
+      
       for (const emailElement of emailElements) {
+        console.log('🔍 Examining email element:', emailElement);
+        
         // Look in the same container/section for name information
         const container = emailElement.closest('div, section, article, .profile, .user-info');
         if (container) {
+          console.log('🔍 Found container:', container);
+          console.log('🔍 Container text (first 200 chars):', container.textContent.substring(0, 200));
+          
           // Look for name patterns in the container
           const containerText = container.textContent;
           
@@ -747,6 +793,23 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
               }
             }
           }
+          
+          // SPECIAL: Look for Product Hunt specific text near the email
+          console.log('🔍 Looking for PH-specific text near email...');
+          
+          // Look for text that contains "Hunter" or "Maker" near the email
+          const hunterMakerPattern = /(Hunter|Maker)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g;
+          let hunterMakerMatch;
+          while ((hunterMakerMatch = hunterMakerPattern.exec(containerText)) !== null) {
+            const role = hunterMakerMatch[1];
+            const name = hunterMakerMatch[2];
+            console.log(`🔍 Found ${role}: ${name}`);
+            
+            if (isValidPersonName(name)) {
+              console.log('✅ Found valid name from Hunter/Maker pattern:', name);
+              return name;
+            }
+          }
         }
       }
       
@@ -754,9 +817,25 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
       console.log('❌ Error in visible name field extraction:', error);
     }
     
-    console.log('❌ No visible name fields found');
-    return null;
-  }
+          // DEBUG: Let's see what text is actually being found on the page
+      console.log('🔍 DEBUG: Page text analysis...');
+      const pageText = document.body.textContent;
+      
+      // Look for any text that might be getting extracted incorrectly
+      const suspiciousTexts = pageText.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}/g) || [];
+      console.log('🔍 Found potential names on page:', suspiciousTexts.slice(0, 20));
+      
+      // Look specifically for "Forum Threads" to see where it's coming from
+      if (pageText.includes('Forum Threads')) {
+        console.log('🔍 Found "Forum Threads" in page text');
+        const forumIndex = pageText.indexOf('Forum Threads');
+        const context = pageText.substring(Math.max(0, forumIndex - 100), forumIndex + 100);
+        console.log('🔍 Context around "Forum Threads":', context);
+      }
+      
+      console.log('❌ No visible name fields found');
+      return null;
+    }
 
   // Method 1: Extract name from Apollo SSR Data (Product Hunt specific)
   function extractNameFromApolloData(email) {
@@ -1212,6 +1291,18 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     const lowerText = trimmed.toLowerCase();
     if (businessKeywords.some(keyword => lowerText.includes(keyword))) {
       console.log('❌ Rejected business name:', trimmed);
+      return false;
+    }
+    
+    // Exclude navigation and UI text patterns
+    const navigationKeywords = [
+      'forum', 'threads', 'launches', 'products', 'news', 'advertise',
+      'submit', 'search', 'sign', 'login', 'subscribe', 'about', 'faq',
+      'terms', 'privacy', 'cookies', 'blog', 'newsletter', 'apps'
+    ];
+    
+    if (navigationKeywords.some(keyword => lowerText.includes(keyword))) {
+      console.log('❌ Rejected navigation text:', trimmed);
       return false;
     }
     
