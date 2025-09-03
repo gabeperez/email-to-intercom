@@ -495,103 +495,39 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     
     let name = '';
     let messagePrefix = '';
-    let extractionMethod = '';
     
-    console.log('🎯 Looking for name associated with email:', email);
-    console.log('==========================================');
+    console.log('Looking for name associated with email:', email);
     
-    // Method 0: Extract from visible Name fields (HIGHEST PRIORITY - Product Hunt profiles)
-    console.log('🚀 Method 0: Trying visible Name fields...');
-    name = extractNameFromVisibleFields(email);
-    if (name) {
-      extractionMethod = 'Visible Name Fields';
-      console.log('✅ Method 0 SUCCESS:', name);
-    } else {
-      console.log('❌ Method 0 FAILED');
-    }
+    // Method 1: Look for Product Hunt moderator interface patterns (PRIMARY)
+    // - Native tooltips/hover elements (HIGHEST PRIORITY)
+    // - Launch Team matching (SECOND PRIORITY)
+    // - Traditional patterns (THIRD PRIORITY)
+    name = extractNameFromModeratorInterface(email);
     
-    // Method 1: Extract from Apollo SSR Data (SECOND PRIORITY - Product Hunt specific)
+    // Method 2: If no name found, try general page patterns (FALLBACK 1)
     if (!name) {
-      console.log('🚀 Method 1: Trying Apollo SSR Data...');
-      name = extractNameFromApolloData(email);
-      if (name) {
-        extractionMethod = 'Apollo SSR Data';
-        console.log('✅ Method 1 SUCCESS:', name);
-      } else {
-        console.log('❌ Method 1 FAILED');
-      }
-    }
-    
-    // Method 2: Look for Product Hunt moderator interface patterns (THIRD PRIORITY)
-    if (!name) {
-      console.log('🚀 Method 2: Trying moderator interface...');
-      name = extractNameFromModeratorInterface(email);
-      if (name) {
-        extractionMethod = 'Moderator Interface';
-        console.log('✅ Method 2 SUCCESS:', name);
-      } else {
-        console.log('❌ Method 2 FAILED');
-      }
-    }
-    
-    // Method 3: If no name found, try general page patterns (FALLBACK 1)
-    if (!name) {
-      console.log('🚀 Method 3: Trying page context...');
       name = extractNameFromPageContext(email);
-      if (name) {
-        extractionMethod = 'Page Context';
-        console.log('✅ Method 3 SUCCESS:', name);
-      } else {
-        console.log('❌ Method 3 FAILED');
-      }
     }
     
-    // Method 4: Look for username-based patterns (FALLBACK 2)
+    // Method 3: Look for username-based patterns (FALLBACK 2)
     if (!name) {
-      console.log('🚀 Method 4: Trying username patterns...');
       name = extractNameFromUsernamePatterns(email);
-      if (name) {
-        extractionMethod = 'Username Patterns';
-        console.log('✅ Method 4 SUCCESS:', name);
-      } else {
-        console.log('❌ Method 4 FAILED');
-      }
     }
     
-    // Method 5: Extract from email username as final fallback (FALLBACK 3)
+    // Method 4: Extract from email username as final fallback (FALLBACK 3)
     if (!name) {
-      console.log('🚀 Method 5: Trying email username extraction...');
       name = extractNameFromEmailUsername(email);
-      if (name) {
-        extractionMethod = 'Email Username';
-        console.log('✅ Method 5 SUCCESS:', name);
-      } else {
-        console.log('❌ Method 5 FAILED');
-      }
     }
     
-    // Method 6: Alt attributes search (FALLBACK 4)
+    // Method 5: Alt attributes search (FALLBACK 4)
     if (!name) {
-      console.log('🚀 Method 6: Trying alt attributes...');
       name = extractNameFromAltAttributes(email);
-      if (name) {
-        extractionMethod = 'Alt Attributes';
-        console.log('✅ Method 6 SUCCESS:', name);
-      } else {
-        console.log('❌ Method 6 FAILED');
-      }
     }
     
     // Clean up the name if found
     if (name) {
-      const originalName = name;
-      
       // Remove common suffixes and prefixes
       name = name.replace(/\s*\([^)]*\).*$/, '').replace(/\s*[-–—].*$/, '').trim();
-      
-      if (originalName !== name) {
-        console.log('🧹 Cleaned name:', originalName, '->', name);
-      }
       
       // Extract first name for greeting
       const firstName = name.split(' ')[0];
@@ -600,13 +536,7 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
       }
     }
     
-    console.log('==========================================');
-    console.log('🎉 FINAL RESULT:');
-    console.log('   Email:', email);
-    console.log('   Name:', name || 'None found');
-    console.log('   Method:', extractionMethod || 'None');
-    console.log('   Greeting:', messagePrefix ? 'Yes' : 'No');
-    console.log('==========================================');
+    console.log('Final extracted name:', name || 'None found');
     
     // Populate and show email panel
     if (!document.getElementById('email-intercom-panel')) {
@@ -620,430 +550,11 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     showEmailPanel();
   }
 
-  // Method 0: Extract name from visible Name fields (Product Hunt profiles)
-  function extractNameFromVisibleFields(email) {
-    console.log('🔍 Searching for visible Name fields on the page...');
-    
-    try {
-      // Look for common patterns where names are displayed on Product Hunt profiles
-      const namePatterns = [
-        // Pattern: "Name: Jacky Zheng" or "Name: Jacky Zheng (verified)"
-        /Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})(?:\s*\([^)]*\))?/g,
-        
-        // Pattern: "Full Name: Jacky Zheng"
-        /Full Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g,
-        
-        // Pattern: "Display Name: Jacky Zheng"
-        /Display Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g,
-        
-        // Pattern: "User: Jacky Zheng" or "User: Jacky Zheng (@username)"
-        /User:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})(?:\s*\([^)]*\))?/g,
-        
-        // Pattern: "Profile: Jacky Zheng"
-        /Profile:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g
-      ];
-      
-      // SPECIAL: Product Hunt specific patterns for product pages
-      const phProductPatterns = [
-        // Pattern: "Hunter [Name] [email]" - this is what we see on the Receiptor AI page
-        /Hunter\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+[\w.+-]+@[\w.-]+/g,
-        
-        // Pattern: "Maker [Name] [email]"
-        /Maker\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+[\w.+-]+@[\w.-]+/g,
-        
-        // Pattern: "Built by [Name]"
-        /Built by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g,
-        
-        // Pattern: "Created by [Name]"
-        /Created by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g
-      ];
-      
-      console.log('🔍 Looking for Product Hunt product page patterns...');
-      
-      // First try Product Hunt specific patterns
-      const pageText = document.body.textContent;
-      
-      for (const pattern of phProductPatterns) {
-        const matches = pageText.match(pattern);
-        if (matches) {
-          for (const match of matches) {
-            const nameMatch = match.match(pattern.source.replace(/\\/g, ''));
-            if (nameMatch && nameMatch[1]) {
-              const foundName = nameMatch[1].trim();
-              
-              // Validate it's a real person name
-              if (isValidPersonName(foundName)) {
-                console.log('✅ Found name from PH product pattern:', foundName);
-                console.log('   Pattern matched:', match);
-                return foundName;
-              }
-            }
-          }
-        }
-      }
-      
-      // Search in the entire page text
-      const pageText = document.body.textContent;
-      
-      for (const pattern of namePatterns) {
-        const matches = pageText.match(pattern);
-        if (matches) {
-          for (const match of matches) {
-            const nameMatch = match.match(pattern.source.replace(/\\/g, ''));
-            if (nameMatch && nameMatch[1]) {
-              const foundName = nameMatch[1].trim();
-              
-              // Validate it's a real person name
-              if (isValidPersonName(foundName)) {
-                console.log('✅ Found name from visible field pattern:', foundName);
-                console.log('   Pattern matched:', match);
-                return foundName;
-              }
-            }
-          }
-        }
-      }
-      
-      // Alternative approach: Look for table-like structures with "Name:" labels
-      const tableRows = document.querySelectorAll('tr, .row, .item, .field');
-      
-      for (const row of tableRows) {
-        const rowText = row.textContent.trim();
-        
-        // Look for rows that contain both "Name:" and the email
-        if (rowText.includes('Name:') && rowText.includes(email)) {
-          console.log('🔍 Found row with Name: and email:', rowText);
-          
-          // Extract the name from this row
-          const nameMatch = rowText.match(/Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/);
-          if (nameMatch && nameMatch[1]) {
-            const foundName = nameMatch[1].trim();
-            if (isValidPersonName(foundName)) {
-              console.log('✅ Found name from table row:', foundName);
-              return foundName;
-            }
-          }
-        }
-      }
-      
-      // Look for profile header sections that might contain the name
-      const profileHeaders = document.querySelectorAll('h1, h2, h3, .profile-name, .user-name, .display-name');
-      
-      for (const header of profileHeaders) {
-        const headerText = header.textContent.trim();
-        
-        // Check if this header contains a valid person name
-        if (isValidPersonName(headerText) && headerText.length > 3) {
-          console.log('🔍 Found potential name in header:', headerText);
-          
-          // Verify this is likely the main profile name by checking if it's prominent
-          const computedStyle = window.getComputedStyle(header);
-          const fontSize = parseInt(computedStyle.fontSize);
-          const fontWeight = computedStyle.fontWeight;
-          
-          // If it's a large, bold header, it's likely the main name
-          if (fontSize >= 18 || fontWeight >= 600) {
-            console.log('✅ Found name in prominent header:', headerText);
-            return headerText;
-          }
-        }
-      }
-      
-      // Look for elements near the email that might contain the name
-      const emailElements = [];
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-      
-      while (walker.nextNode()) {
-        if (walker.currentNode.textContent.includes(email)) {
-          emailElements.push(walker.currentNode.parentElement);
-        }
-      }
-      
-      console.log('🔍 Found', emailElements.length, 'elements containing the email');
-      
-      for (const emailElement of emailElements) {
-        console.log('🔍 Examining email element:', emailElement);
-        
-        // Look in the same container/section for name information
-        const container = emailElement.closest('div, section, article, .profile, .user-info');
-        if (container) {
-          console.log('🔍 Found container:', container);
-          console.log('🔍 Container text (first 200 chars):', container.textContent.substring(0, 200));
-          
-          // Look for name patterns in the container
-          const containerText = container.textContent;
-          
-          for (const pattern of namePatterns) {
-            const matches = containerText.match(pattern);
-            if (matches) {
-              for (const match of matches) {
-                const nameMatch = match.match(pattern.source.replace(/\\/g, ''));
-                if (nameMatch && nameMatch[1]) {
-                  const foundName = nameMatch[1].trim();
-                  if (isValidPersonName(foundName)) {
-                    console.log('✅ Found name in container near email:', foundName);
-                    return foundName;
-                  }
-                }
-              }
-            }
-          }
-          
-          // SPECIAL: Look for Product Hunt specific text near the email
-          console.log('🔍 Looking for PH-specific text near email...');
-          
-          // Look for text that contains "Hunter" or "Maker" near the email
-          const hunterMakerPattern = /(Hunter|Maker)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g;
-          let hunterMakerMatch;
-          while ((hunterMakerMatch = hunterMakerPattern.exec(containerText)) !== null) {
-            const role = hunterMakerMatch[1];
-            const name = hunterMakerMatch[2];
-            console.log(`🔍 Found ${role}: ${name}`);
-            
-            if (isValidPersonName(name)) {
-              console.log('✅ Found valid name from Hunter/Maker pattern:', name);
-              return name;
-            }
-          }
-        }
-      }
-      
-    } catch (error) {
-      console.log('❌ Error in visible name field extraction:', error);
-    }
-    
-          // DEBUG: Let's see what text is actually being found on the page
-      console.log('🔍 DEBUG: Page text analysis...');
-      const pageText = document.body.textContent;
-      
-      // Look for any text that might be getting extracted incorrectly
-      const suspiciousTexts = pageText.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}/g) || [];
-      console.log('🔍 Found potential names on page:', suspiciousTexts.slice(0, 20));
-      
-      // Look specifically for "Forum Threads" to see where it's coming from
-      if (pageText.includes('Forum Threads')) {
-        console.log('🔍 Found "Forum Threads" in page text');
-        const forumIndex = pageText.indexOf('Forum Threads');
-        const context = pageText.substring(Math.max(0, forumIndex - 100), forumIndex + 100);
-        console.log('🔍 Context around "Forum Threads":', context);
-      }
-      
-      console.log('❌ No visible name fields found');
-      return null;
-    }
-
-  // Method 1: Extract name from Apollo SSR Data (Product Hunt specific)
-  function extractNameFromApolloData(email) {
-    console.log('🔍 Searching Apollo SSR Data for email match:', email);
-    
-    try {
-      // Access the Apollo SSR data transport object
-      const apolloData = window[Symbol.for("ApolloSSRDataTransport")];
-      
-      if (!apolloData) {
-        console.log('❌ Apollo SSR Data not found');
-        return null;
-      }
-      
-      console.log('✅ Apollo data found, analyzing structure...');
-      console.log('Apollo data keys:', Object.keys(apolloData));
-      
-      // Convert Apollo data to string for searching, but also work with the object directly
-      const apolloString = JSON.stringify(apolloData);
-      console.log('Apollo data size:', apolloString.length, 'characters');
-      
-      // Enhanced function to deeply search for email-name associations
-      function findNameForEmailInObject(obj, targetEmail, path = '') {
-        if (!obj || typeof obj !== 'object') return null;
-        
-        // If this object has both email and name properties
-        if (obj.email === targetEmail) {
-          console.log(`🎯 Found exact email match at path: ${path}`);
-          
-          // Try multiple name field variations
-          const nameFields = ['name', 'firstName', 'displayName', 'fullName', 'title'];
-          for (const field of nameFields) {
-            if (obj[field] && typeof obj[field] === 'string' && obj[field].trim()) {
-              let name = obj[field].trim();
-              
-              // If we have firstName, try to build full name
-              if (field === 'firstName' && obj.lastName) {
-                name = `${obj.firstName} ${obj.lastName}`.trim();
-              }
-              
-              console.log(`✅ Found name from field "${field}":`, name);
-              return name;
-            }
-          }
-        }
-        
-        // Recursively search in nested objects and arrays
-        for (const [key, value] of Object.entries(obj)) {
-          if (value && typeof value === 'object') {
-            const currentPath = path ? `${path}.${key}` : key;
-            
-            if (Array.isArray(value)) {
-              // Search each item in array
-              for (let i = 0; i < value.length; i++) {
-                const result = findNameForEmailInObject(value[i], targetEmail, `${currentPath}[${i}]`);
-                if (result) return result;
-              }
-            } else {
-              // Search nested object
-              const result = findNameForEmailInObject(value, targetEmail, currentPath);
-              if (result) return result;
-            }
-          }
-        }
-        
-        return null;
-      }
-      
-      // First attempt: Deep object search
-      console.log('🔄 Starting deep object search...');
-      const deepSearchResult = findNameForEmailInObject(apolloData, email);
-      if (deepSearchResult) {
-        console.log('🎉 Found name via deep search:', deepSearchResult);
-        return deepSearchResult;
-      }
-      
-      // Second attempt: Look for specific Product Hunt patterns in the data
-      console.log('🔄 Searching for Product Hunt specific patterns...');
-      
-      // Look for hunt/product data structures
-      const huntPattern = /"hunt":\s*\{[^}]*"hunters":\s*\[([^\]]+)\][^}]*\}/g;
-      const productPattern = /"product":\s*\{[^}]*"makers":\s*\[([^\]]+)\][^}]*\}/g;
-      
-      function parseUserArray(arrayContent, label) {
-        try {
-          console.log(`🔄 Parsing ${label} array:`, arrayContent.substring(0, 200) + '...');
-          
-          // Try to extract user objects from the array content
-          const userMatches = arrayContent.match(/\{[^}]*"email"[^}]*\}/g);
-          if (userMatches) {
-            for (const userMatch of userMatches) {
-              try {
-                const userObj = JSON.parse(userMatch);
-                if (userObj.email === email) {
-                  const name = userObj.name || userObj.firstName || userObj.displayName;
-                  if (name) {
-                    console.log(`✅ Found ${label} name:`, name);
-                    return name.trim();
-                  }
-                }
-              } catch (e) {
-                console.log(`⚠️ Error parsing user object in ${label}:`, e);
-              }
-            }
-          }
-        } catch (e) {
-          console.log(`⚠️ Error parsing ${label} array:`, e);
-        }
-        return null;
-      }
-      
-      // Search for hunters
-      let match;
-      while ((match = huntPattern.exec(apolloString)) !== null) {
-        const result = parseUserArray(match[1], 'hunters');
-        if (result) return result;
-      }
-      
-      // Search for makers
-      huntPattern.lastIndex = 0; // Reset regex
-      while ((match = productPattern.exec(apolloString)) !== null) {
-        const result = parseUserArray(match[1], 'makers');
-        if (result) return result;
-      }
-      
-      // Third attempt: Look for email in context and find nearby names
-      console.log('🔄 Searching for email in context...');
-      const emailIndex = apolloString.indexOf(email);
-      
-      if (emailIndex !== -1) {
-        console.log('📍 Found email at position:', emailIndex);
-        
-        // Get a larger context around the email
-        const contextStart = Math.max(0, emailIndex - 2000);
-        const contextEnd = Math.min(apolloString.length, emailIndex + email.length + 2000);
-        const context = apolloString.substring(contextStart, contextEnd);
-        
-        console.log('📄 Context around email:', context.substring(0, 300) + '...');
-        
-        // Look for different name patterns in the context
-        const namePatterns = [
-          /"name"\s*:\s*"([^"]+)"/g,
-          /"firstName"\s*:\s*"([^"]+)"/g,
-          /"displayName"\s*:\s*"([^"]+)"/g,
-          /"fullName"\s*:\s*"([^"]+)"/g,
-          /"title"\s*:\s*"([^"]+)"/g
-        ];
-        
-        for (const pattern of namePatterns) {
-          let nameMatch;
-          while ((nameMatch = pattern.exec(context)) !== null) {
-            const foundName = nameMatch[1].trim();
-            
-            // Validate it looks like a person's name and not a company/product name
-            if (isValidPersonName(foundName) && 
-                !foundName.toLowerCase().includes('social') &&
-                !foundName.toLowerCase().includes('business') &&
-                !foundName.toLowerCase().includes('company')) {
-              
-              console.log('✅ Found valid name in context:', foundName);
-              return foundName;
-            }
-          }
-        }
-      }
-      
-      // Fourth attempt: Look for any user objects that might contain the email
-      console.log('🔄 Searching for user objects containing email...');
-      const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      
-      // More flexible user object pattern
-      const userObjectPattern = new RegExp(`\\{[^{}]{0,500}?(?:"email"\\s*:\\s*"${emailPattern}"|"${emailPattern}"[^{}]{0,500}?"name")[^{}]{0,500}?\\}`, 'g');
-      const userMatches = apolloString.match(userObjectPattern);
-      
-      if (userMatches) {
-        console.log('📋 Found', userMatches.length, 'potential user objects');
-        
-        for (const userMatch of userMatches) {
-          try {
-            // Try to extract name from the user object string even if it's not perfect JSON
-            const nameMatch = userMatch.match(/"name"\s*:\s*"([^"]+)"/);
-            const firstNameMatch = userMatch.match(/"firstName"\s*:\s*"([^"]+)"/);
-            const displayNameMatch = userMatch.match(/"displayName"\s*:\s*"([^"]+)"/);
-            
-            let foundName = null;
-            if (nameMatch) foundName = nameMatch[1];
-            else if (firstNameMatch) foundName = firstNameMatch[1];
-            else if (displayNameMatch) foundName = displayNameMatch[1];
-            
-            if (foundName && isValidPersonName(foundName)) {
-              console.log('✅ Found name in user object:', foundName);
-              return foundName.trim();
-            }
-          } catch (e) {
-            console.log('⚠️ Error parsing potential user object:', e);
-          }
-        }
-      }
-      
-    } catch (error) {
-      console.log('❌ Error accessing Apollo SSR Data:', error);
-    }
-    
-    console.log('❌ No name found in Apollo SSR Data');
-    return null;
-  }
-
   // Method 1: Extract name from Product Hunt moderator interface
+  // Priority order:
+  // 1. Native tooltips/hover elements (HIGHEST)
+  // 2. Launch Team matching (SECOND)
+  // 3. Traditional patterns (THIRD)
   function extractNameFromModeratorInterface(email) {
     console.log('Searching moderator interface for name...');
     
@@ -1522,7 +1033,7 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         // Single word - keep as is if it looks like a name
         if (username.length >= 2 && username.length <= 15 && /^[a-z]+$/.test(username)) {
           nameParts = [username];
-        } else {
+          } else {
           console.log('Username does not look like a name, skipping');
           return null;
         }
@@ -1638,7 +1149,7 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         link.textContent = match[0];
         link.style.cssText = 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500;';
         
-        // Remove our tooltip to allow native tooltips to show
+        // No tooltip - let native tooltips show through
         link.addEventListener('click', (e) => handleEmailClick(e, match[0]));
         fragment.appendChild(link);
         lastIndex = match.index + match[0].length;
@@ -1666,7 +1177,7 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
 
   // Function to initialize the extension
   function initializeExtension() {
-    console.log('Initializing Email to Intercom Linker');
+      console.log('Initializing Email to Intercom Linker');
     
     // Inject styles first
     injectStyles();
@@ -1674,16 +1185,16 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     // Create email panel (but don't show it yet)
     createEmailPanel();
     
-    makeEmailsClickable();
+      makeEmailsClickable();
 
-    // Set up MutationObserver
-    const observer = new MutationObserver(mutations => {
-      if (mutations.some(mutation => mutation.type === 'childList' && mutation.addedNodes.length > 0)) {
-        debouncedMakeEmailsClickable();
-      }
-    });
+      // Set up MutationObserver
+      const observer = new MutationObserver(mutations => {
+        if (mutations.some(mutation => mutation.type === 'childList' && mutation.addedNodes.length > 0)) {
+          debouncedMakeEmailsClickable();
+        }
+      });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.body, { childList: true, subtree: true });
   }
 
   // Multiple initialization strategies to handle different loading scenarios
