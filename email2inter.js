@@ -551,7 +551,14 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
   function extractNameFromModeratorInterface(email) {
     console.log('Searching moderator interface for name...');
     
-    // NEW: Product Hunt Launch Team Matching (HIGHEST PRIORITY)
+    // NEW: Native Tooltip/Hover Detection (HIGHEST PRIORITY)
+    const nativeTooltipName = extractNameFromNativeTooltips(email);
+    if (nativeTooltipName) {
+      console.log('Found name from native tooltip:', nativeTooltipName);
+      return nativeTooltipName;
+    }
+    
+    // Product Hunt Launch Team Matching (SECOND PRIORITY)
     const launchTeamName = extractNameFromLaunchTeam(email);
     if (launchTeamName) {
       console.log('Found name from Launch Team matching:', launchTeamName);
@@ -658,7 +665,130 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     return null;
   }
 
-  // NEW: Extract name by matching email with Launch Team members
+  // NEW: Extract name from native tooltips/hover elements (HIGHEST PRIORITY)
+  function extractNameFromNativeTooltips(email) {
+    console.log('Searching for native tooltips near email...');
+    
+    // Find elements that contain the email
+    const emailElements = [];
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    while (walker.nextNode()) {
+      if (walker.currentNode.textContent.includes(email)) {
+        emailElements.push(walker.currentNode.parentElement);
+      }
+    }
+    
+    console.log('Found email elements:', emailElements.length);
+    
+    for (const emailElement of emailElements) {
+      // Look for elements near the email that might have tooltips
+      const nearbyElements = [
+        emailElement,
+        emailElement.parentElement,
+        emailElement.previousElementSibling,
+        emailElement.nextElementSibling
+      ].filter(el => el);
+      
+      // Also look for elements in the same container
+      const container = emailElement.closest('div, section, article, .row, .item, .entry');
+      if (container) {
+        const containerElements = container.querySelectorAll('*[title], *[data-tooltip], *[aria-label]');
+        nearbyElements.push(...containerElements);
+      }
+      
+      for (const element of nearbyElements) {
+        if (!element) continue;
+        
+        // Check for existing tooltips in title attribute
+        const titleAttr = element.getAttribute('title');
+        if (titleAttr && isValidPersonName(titleAttr)) {
+          console.log('Found name in title attribute:', titleAttr);
+          return titleAttr.trim();
+        }
+        
+        // Check for data-tooltip attributes
+        const dataTooltip = element.getAttribute('data-tooltip') || 
+                           element.getAttribute('data-title') ||
+                           element.getAttribute('aria-label');
+        if (dataTooltip && isValidPersonName(dataTooltip)) {
+          console.log('Found name in data attribute:', dataTooltip);
+          return dataTooltip.trim();
+        }
+        
+        // Look for elements that might show tooltips on hover
+        // These often have specific classes or data attributes
+        const tooltipClasses = ['tooltip', 'hover-tooltip', 'user-tooltip', 'profile-tooltip'];
+        const hasTooltipClass = tooltipClasses.some(cls => element.classList.contains(cls));
+        
+        if (hasTooltipClass) {
+          const tooltipText = element.textContent.trim();
+          if (isValidPersonName(tooltipText)) {
+            console.log('Found name in tooltip element:', tooltipText);
+            return tooltipText;
+          }
+        }
+        
+        // Look for hidden/overlay elements that might be tooltips
+        const hiddenTooltips = container?.querySelectorAll('[style*="position:"], [style*="z-index"], .popup, .overlay') || [];
+        for (const tooltip of hiddenTooltips) {
+          const tooltipText = tooltip.textContent.trim();
+          if (isValidPersonName(tooltipText) && tooltipText.length <= 50) {
+            console.log('Found name in hidden tooltip:', tooltipText);
+            return tooltipText;
+          }
+        }
+        
+        // Special handling for Product Hunt user elements
+        // Look for elements that might contain user names near emails
+        if (element.textContent.includes('Hunter') || element.textContent.includes('Maker')) {
+          const userNameElements = element.querySelectorAll('span, div, strong, b');
+          for (const nameEl of userNameElements) {
+            const nameText = nameEl.textContent.trim();
+            if (isValidPersonName(nameText) && 
+                !nameText.includes('Hunter') && 
+                !nameText.includes('Maker') &&
+                !nameText.includes('@')) {
+              console.log('Found name near Hunter/Maker label:', nameText);
+              return nameText;
+            }
+          }
+        }
+      }
+    }
+    
+    console.log('No native tooltip names found');
+    return null;
+  }
+
+  // Helper function to validate if text looks like a person's name
+  function isValidPersonName(text) {
+    if (!text || typeof text !== 'string') return false;
+    
+    const trimmed = text.trim();
+    
+    // Must be 2-50 characters
+    if (trimmed.length < 2 || trimmed.length > 50) return false;
+    
+    // Must not contain email, URLs, or common non-name patterns
+    if (trimmed.includes('@') || 
+        trimmed.includes('http') || 
+        trimmed.includes('.com') ||
+        trimmed.includes('Click') ||
+        trimmed.includes('Email') ||
+        trimmed.includes('Send')) return false;
+    
+    // Must match person name pattern (1-3 words, properly capitalized)
+    const namePattern = /^[A-Z][a-z]+(?: [A-Z][a-z]*){0,2}$/;
+    return namePattern.test(trimmed);
+  }
+
+  // Extract name by matching email with Launch Team members
   function extractNameFromLaunchTeam(email) {
     console.log('Searching Launch Team for email match...');
     
@@ -979,7 +1109,7 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         link.textContent = match[0];
         link.style.cssText = 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500;';
         
-        link.title = "Click to send email via Intercom";
+        // Remove our tooltip to allow native tooltips to show
         link.addEventListener('click', (e) => handleEmailClick(e, match[0]));
         fragment.appendChild(link);
         lastIndex = match.index + match[0].length;
