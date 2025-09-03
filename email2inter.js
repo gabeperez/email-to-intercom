@@ -500,73 +500,85 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     console.log('🎯 Looking for name associated with email:', email);
     console.log('==========================================');
     
-    // Method 0: Extract from Apollo SSR Data (HIGHEST PRIORITY - Product Hunt specific)
-    console.log('🚀 Method 0: Trying Apollo SSR Data...');
-    name = extractNameFromApolloData(email);
+    // Method 0: Extract from visible Name fields (HIGHEST PRIORITY - Product Hunt profiles)
+    console.log('🚀 Method 0: Trying visible Name fields...');
+    name = extractNameFromVisibleFields(email);
     if (name) {
-      extractionMethod = 'Apollo SSR Data';
+      extractionMethod = 'Visible Name Fields';
       console.log('✅ Method 0 SUCCESS:', name);
     } else {
       console.log('❌ Method 0 FAILED');
     }
     
-    // Method 1: Look for Product Hunt moderator interface patterns (SECONDARY)
+    // Method 1: Extract from Apollo SSR Data (SECOND PRIORITY - Product Hunt specific)
     if (!name) {
-      console.log('🚀 Method 1: Trying moderator interface...');
-      name = extractNameFromModeratorInterface(email);
+      console.log('🚀 Method 1: Trying Apollo SSR Data...');
+      name = extractNameFromApolloData(email);
       if (name) {
-        extractionMethod = 'Moderator Interface';
+        extractionMethod = 'Apollo SSR Data';
         console.log('✅ Method 1 SUCCESS:', name);
       } else {
         console.log('❌ Method 1 FAILED');
       }
     }
     
-    // Method 2: If no name found, try general page patterns (FALLBACK 1)
+    // Method 2: Look for Product Hunt moderator interface patterns (THIRD PRIORITY)
     if (!name) {
-      console.log('🚀 Method 2: Trying page context...');
-      name = extractNameFromPageContext(email);
+      console.log('🚀 Method 2: Trying moderator interface...');
+      name = extractNameFromModeratorInterface(email);
       if (name) {
-        extractionMethod = 'Page Context';
+        extractionMethod = 'Moderator Interface';
         console.log('✅ Method 2 SUCCESS:', name);
       } else {
         console.log('❌ Method 2 FAILED');
       }
     }
     
-    // Method 3: Look for username-based patterns (FALLBACK 2)
+    // Method 3: If no name found, try general page patterns (FALLBACK 1)
     if (!name) {
-      console.log('🚀 Method 3: Trying username patterns...');
-      name = extractNameFromUsernamePatterns(email);
+      console.log('🚀 Method 3: Trying page context...');
+      name = extractNameFromPageContext(email);
       if (name) {
-        extractionMethod = 'Username Patterns';
+        extractionMethod = 'Page Context';
         console.log('✅ Method 3 SUCCESS:', name);
       } else {
         console.log('❌ Method 3 FAILED');
       }
     }
     
-    // Method 4: Extract from email username as final fallback (FALLBACK 3)
+    // Method 4: Look for username-based patterns (FALLBACK 2)
     if (!name) {
-      console.log('🚀 Method 4: Trying email username extraction...');
-      name = extractNameFromEmailUsername(email);
+      console.log('🚀 Method 4: Trying username patterns...');
+      name = extractNameFromUsernamePatterns(email);
       if (name) {
-        extractionMethod = 'Email Username';
+        extractionMethod = 'Username Patterns';
         console.log('✅ Method 4 SUCCESS:', name);
       } else {
         console.log('❌ Method 4 FAILED');
       }
     }
     
-    // Method 5: Alt attributes search (FALLBACK 4)
+    // Method 5: Extract from email username as final fallback (FALLBACK 3)
     if (!name) {
-      console.log('🚀 Method 5: Trying alt attributes...');
-      name = extractNameFromAltAttributes(email);
+      console.log('🚀 Method 5: Trying email username extraction...');
+      name = extractNameFromEmailUsername(email);
       if (name) {
-        extractionMethod = 'Alt Attributes';
+        extractionMethod = 'Email Username';
         console.log('✅ Method 5 SUCCESS:', name);
       } else {
         console.log('❌ Method 5 FAILED');
+      }
+    }
+    
+    // Method 6: Alt attributes search (FALLBACK 4)
+    if (!name) {
+      console.log('🚀 Method 6: Trying alt attributes...');
+      name = extractNameFromAltAttributes(email);
+      if (name) {
+        extractionMethod = 'Alt Attributes';
+        console.log('✅ Method 6 SUCCESS:', name);
+      } else {
+        console.log('❌ Method 6 FAILED');
       }
     }
     
@@ -608,7 +620,145 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     showEmailPanel();
   }
 
-  // Method 0: Extract name from Apollo SSR Data (Product Hunt specific)
+  // Method 0: Extract name from visible Name fields (Product Hunt profiles)
+  function extractNameFromVisibleFields(email) {
+    console.log('🔍 Searching for visible Name fields on the page...');
+    
+    try {
+      // Look for common patterns where names are displayed on Product Hunt profiles
+      const namePatterns = [
+        // Pattern: "Name: Jacky Zheng" or "Name: Jacky Zheng (verified)"
+        /Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})(?:\s*\([^)]*\))?/g,
+        
+        // Pattern: "Full Name: Jacky Zheng"
+        /Full Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g,
+        
+        // Pattern: "Display Name: Jacky Zheng"
+        /Display Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g,
+        
+        // Pattern: "User: Jacky Zheng" or "User: Jacky Zheng (@username)"
+        /User:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})(?:\s*\([^)]*\))?/g,
+        
+        // Pattern: "Profile: Jacky Zheng"
+        /Profile:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g
+      ];
+      
+      // Search in the entire page text
+      const pageText = document.body.textContent;
+      
+      for (const pattern of namePatterns) {
+        const matches = pageText.match(pattern);
+        if (matches) {
+          for (const match of matches) {
+            const nameMatch = match.match(pattern.source.replace(/\\/g, ''));
+            if (nameMatch && nameMatch[1]) {
+              const foundName = nameMatch[1].trim();
+              
+              // Validate it's a real person name
+              if (isValidPersonName(foundName)) {
+                console.log('✅ Found name from visible field pattern:', foundName);
+                console.log('   Pattern matched:', match);
+                return foundName;
+              }
+            }
+          }
+        }
+      }
+      
+      // Alternative approach: Look for table-like structures with "Name:" labels
+      const tableRows = document.querySelectorAll('tr, .row, .item, .field');
+      
+      for (const row of tableRows) {
+        const rowText = row.textContent.trim();
+        
+        // Look for rows that contain both "Name:" and the email
+        if (rowText.includes('Name:') && rowText.includes(email)) {
+          console.log('🔍 Found row with Name: and email:', rowText);
+          
+          // Extract the name from this row
+          const nameMatch = rowText.match(/Name:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/);
+          if (nameMatch && nameMatch[1]) {
+            const foundName = nameMatch[1].trim();
+            if (isValidPersonName(foundName)) {
+              console.log('✅ Found name from table row:', foundName);
+              return foundName;
+            }
+          }
+        }
+      }
+      
+      // Look for profile header sections that might contain the name
+      const profileHeaders = document.querySelectorAll('h1, h2, h3, .profile-name, .user-name, .display-name');
+      
+      for (const header of profileHeaders) {
+        const headerText = header.textContent.trim();
+        
+        // Check if this header contains a valid person name
+        if (isValidPersonName(headerText) && headerText.length > 3) {
+          console.log('🔍 Found potential name in header:', headerText);
+          
+          // Verify this is likely the main profile name by checking if it's prominent
+          const computedStyle = window.getComputedStyle(header);
+          const fontSize = parseInt(computedStyle.fontSize);
+          const fontWeight = computedStyle.fontWeight;
+          
+          // If it's a large, bold header, it's likely the main name
+          if (fontSize >= 18 || fontWeight >= 600) {
+            console.log('✅ Found name in prominent header:', headerText);
+            return headerText;
+          }
+        }
+      }
+      
+      // Look for elements near the email that might contain the name
+      const emailElements = [];
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+      
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent.includes(email)) {
+          emailElements.push(walker.currentNode.parentElement);
+        }
+      }
+      
+      for (const emailElement of emailElements) {
+        // Look in the same container/section for name information
+        const container = emailElement.closest('div, section, article, .profile, .user-info');
+        if (container) {
+          // Look for name patterns in the container
+          const containerText = container.textContent;
+          
+          for (const pattern of namePatterns) {
+            const matches = containerText.match(pattern);
+            if (matches) {
+              for (const match of matches) {
+                const nameMatch = match.match(pattern.source.replace(/\\/g, ''));
+                if (nameMatch && nameMatch[1]) {
+                  const foundName = nameMatch[1].trim();
+                  if (isValidPersonName(foundName)) {
+                    console.log('✅ Found name in container near email:', foundName);
+                    return foundName;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.log('❌ Error in visible name field extraction:', error);
+    }
+    
+    console.log('❌ No visible name fields found');
+    return null;
+  }
+
+  // Method 1: Extract name from Apollo SSR Data (Product Hunt specific)
   function extractNameFromApolloData(email) {
     console.log('🔍 Searching Apollo SSR Data for email match:', email);
     
