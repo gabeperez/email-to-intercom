@@ -30,7 +30,7 @@
       font-weight: 600;
       color: #555;
     }
-    input, select { 
+    input, select, textarea { 
       width: 100%; 
       padding: 12px; 
       border: 2px solid #e1e5e9; 
@@ -38,8 +38,14 @@
       font-size: 14px;
       transition: border-color 0.2s;
       box-sizing: border-box;
+      font-family: inherit;
     }
-    input:focus, select:focus {
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      line-height: 1.5;
+    }
+    input:focus, select:focus, textarea:focus {
       outline: none;
       border-color: #007bff;
     }
@@ -127,6 +133,17 @@
         <label for="teamId">Default Team ID (Optional)</label>
         <input type="text" id="teamId" placeholder="530165">
         <div class="help-text">For automatic conversation assignment</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="allowedDomains">Allowed Websites (Optional)</label>
+        <textarea id="allowedDomains" rows="4" placeholder="Leave empty to work on all websites, or enter one domain/URL per line...&#10;&#10;Examples:&#10;producthunt.com&#10;https://www.example.com/specific-page&#10;*.mydomain.com"></textarea>
+        <div class="help-text">
+          <strong>Leave empty</strong> to work on all websites<br>
+          <strong>Domain only:</strong> <code>producthunt.com</code> (works on all pages of that domain)<br>
+          <strong>Specific URL:</strong> <code>https://www.example.com/page</code> (works only on that exact page)<br>
+          <strong>Wildcard subdomain:</strong> <code>*.mydomain.com</code> (works on all subdomains)
+        </div>
       </div>
       
       <div class="button-group">

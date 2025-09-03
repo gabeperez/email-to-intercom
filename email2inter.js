@@ -2,27 +2,72 @@
 function matchesAllowedDomains(url, allowedDomains) {
   if (!Array.isArray(allowedDomains) || allowedDomains.length === 0) return false;
   const pageUrl = new URL(url);
+  
   return allowedDomains.some(pattern => {
     pattern = pattern.trim();
     if (!pattern) return false;
+    
+    console.log(`Checking pattern "${pattern}" against URL "${url}"`);
+    
     // If pattern is a full URL
     if (pattern.startsWith('http://') || pattern.startsWith('https://')) {
       try {
         const patternUrl = new URL(pattern);
-        // Match full URL (ignoring trailing slash)
-        return (
-          pageUrl.href.replace(/\/$/, '') === patternUrl.href.replace(/\/$/, '')
-        );
+        
+        // Exact URL match (ignoring trailing slash and query params)
+        const pageBase = pageUrl.origin + pageUrl.pathname.replace(/\/$/, '');
+        const patternBase = patternUrl.origin + patternUrl.pathname.replace(/\/$/, '');
+        
+        if (pageBase === patternBase) {
+          console.log(`✅ Exact URL match: ${pattern}`);
+          return true;
+        }
+        
+        // Path prefix match (e.g., https://example.com/admin matches https://example.com/admin/users)
+        if (pageUrl.origin === patternUrl.origin && 
+            pageUrl.pathname.startsWith(patternUrl.pathname.replace(/\/$/, ''))) {
+          console.log(`✅ URL prefix match: ${pattern}`);
+          return true;
+        }
+        
       } catch (e) {
+        console.log(`❌ Invalid URL pattern: ${pattern}`);
         return false;
       }
-    } else {
-      // Otherwise, treat as domain match (e.g. example.com)
-      return (
-        pageUrl.hostname === pattern ||
-        pageUrl.hostname.endsWith('.' + pattern)
-      );
+    } 
+    // Wildcard subdomain pattern (e.g., *.example.com)
+    else if (pattern.startsWith('*.')) {
+      const baseDomain = pattern.slice(2); // Remove *.
+      const isSubdomainMatch = pageUrl.hostname === baseDomain || 
+                              pageUrl.hostname.endsWith('.' + baseDomain);
+      if (isSubdomainMatch) {
+        console.log(`✅ Wildcard subdomain match: ${pattern}`);
+        return true;
+      }
     }
+    // Domain-only pattern (e.g., example.com, subdomain.example.com)
+    else {
+      // Exact domain match
+      if (pageUrl.hostname === pattern) {
+        console.log(`✅ Exact domain match: ${pattern}`);
+        return true;
+      }
+      
+      // Subdomain match (e.g., pattern "example.com" matches "www.example.com")
+      if (pageUrl.hostname.endsWith('.' + pattern)) {
+        console.log(`✅ Subdomain match: ${pattern}`);
+        return true;
+      }
+      
+      // Parent domain match (e.g., pattern "www.example.com" matches "example.com")
+      if (pattern.includes('.') && pattern.startsWith(pageUrl.hostname.replace(/^[^.]+\./, ''))) {
+        console.log(`✅ Parent domain match: ${pattern}`);
+        return true;
+      }
+    }
+    
+    console.log(`❌ No match: ${pattern}`);
+    return false;
   });
 }
 
@@ -277,13 +322,19 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     console.error('Chrome runtime error:', chrome.runtime.lastError);
     return;
   }
+  
   const allowedDomains = result.allowedDomains;
+  
   // If allowedDomains is empty or not set, run everywhere (default behavior)
   if (Array.isArray(allowedDomains) && allowedDomains.length > 0) {
+    console.log('Checking domain restrictions...', allowedDomains);
     if (!matchesAllowedDomains(window.location.href, allowedDomains)) {
-      // Not allowed, do nothing
+      console.log('❌ Current website not in allowed domains. Extension disabled.');
       return;
     }
+    console.log('✅ Current website matches allowed domains. Extension enabled.');
+  } else {
+    console.log('✅ No domain restrictions set. Extension enabled on all websites.');
   }
 
   // Improved email regex
@@ -437,107 +488,42 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     }
   }
 
-  // Function to handle email click
+  // Enhanced name extraction specifically for Product Hunt moderator interface
   function handleEmailClick(e, email) {
     e.preventDefault();
-    e.stopPropagation(); // Prevent event bubbling
+    e.stopPropagation();
     
     let name = '';
     let messagePrefix = '';
     
     console.log('Looking for name associated with email:', email);
     
-    // Get the full page source for comprehensive search
-    const pageSource = document.documentElement.outerHTML;
-    const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Method 1: Look for Product Hunt moderator interface patterns (PRIMARY)
+    name = extractNameFromModeratorInterface(email);
     
-    // Method 1: Look for Product Hunt specific patterns where email and name are directly associated
-    
-    // Pattern A: JSON objects with email and name together
-    const jsonPatterns = [
-      // {"email":"user@domain.com","name":"Full Name"}
-      new RegExp(`\\{[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*\\}`, 'i'),
-      // {"name":"Full Name","email":"user@domain.com"}  
-      new RegExp(`\\{[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*\\}`, 'i'),
-      // Product Hunt user objects: "user":{"name":"Full Name",...,"email":"user@domain.com"}
-      new RegExp(`"user"\\s*:\\s*\\{[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*\\}`, 'i'),
-      new RegExp(`"user"\\s*:\\s*\\{[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*\\}`, 'i')
-    ];
-    
-    for (const pattern of jsonPatterns) {
-      const match = pageSource.match(pattern);
-      if (match && match[1]) {
-        name = match[1].trim();
-        console.log('Found name from JSON pattern:', name);
-        break;
-      }
+    // Method 2: If no name found, try general page patterns (FALLBACK 1)
+    if (!name) {
+      name = extractNameFromPageContext(email);
     }
     
-    // Pattern B: If no JSON match, look for username-based patterns
+    // Method 3: Look for username-based patterns (FALLBACK 2)
     if (!name) {
-      // Extract username from email (part before @)
-      const emailUsername = email.split('@')[0];
-      
-      // Look for @username links associated with this email
-      const usernamePattern = new RegExp(`href="[^"]*/@([^"]+)"[^>]*>[^<]*${emailPattern}|${emailPattern}[^<]*<[^>]*href="[^"]*/@([^"]+)"`, 'i');
-      const usernameMatch = pageSource.match(usernamePattern);
-      
-      if (usernameMatch) {
-        const username = usernameMatch[1] || usernameMatch[2];
-        console.log('Found username associated with email:', username);
-        
-        // Now look for the display name for this username
-        const displayNamePattern = new RegExp(`alt="([^"]+)"[^>]*>[^<]*href="[^"]*/@${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'i');
-        const displayNameMatch = pageSource.match(displayNamePattern);
-        
-        if (displayNameMatch && displayNameMatch[1]) {
-          name = displayNameMatch[1].trim();
-          console.log('Found display name for username:', name);
-        } else {
-          // Fallback: Convert username to readable name
-          // e.g., "romeobellon" -> "Romeo Bellon", "rohanrecommends" -> "Rohan Recommends"
-          const cleanUsername = username.replace(/[0-9]+$/, ''); // Remove trailing numbers
-          const nameParts = cleanUsername.split(/[._-]/);
-          name = nameParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
-          console.log('Generated name from username:', name);
-        }
-      }
+      name = extractNameFromUsernamePatterns(email);
     }
     
-    // Pattern C: If still no name, look for alt attributes in img tags near the email
+    // Method 4: Extract from email username as final fallback (FALLBACK 3)
     if (!name) {
-      // Find image alt attributes that might contain names near the email
-      const emailRegex = new RegExp(emailPattern, 'gi');
-      let match;
-      
-      while ((match = emailRegex.exec(pageSource)) !== null) {
-        const emailIndex = match.index;
-        
-        // Look in a wider context around the email (300 chars each direction)
-        const contextStart = Math.max(0, emailIndex - 300);
-        const contextEnd = Math.min(pageSource.length, emailIndex + email.length + 300);
-        const context = pageSource.substring(contextStart, contextEnd);
-        
-        // Look for alt attributes with names
-        const altMatches = context.match(/alt="([^"]+)"/g);
-        if (altMatches) {
-          for (const altMatch of altMatches) {
-            const altText = altMatch.match(/alt="([^"]+)"/)[1];
-            // Check if this looks like a person's name (2-4 words, each starting with capital)
-            if (/^[A-Z][a-z]+(?: [A-Z][a-z]*){1,3}$/.test(altText) && altText.length > 3) {
-              name = altText.trim();
-              console.log('Found name from alt attribute:', name);
-              break;
-            }
-          }
-          if (name) break;
-        }
-      }
+      name = extractNameFromEmailUsername(email);
+    }
+    
+    // Method 5: Alt attributes search (FALLBACK 4)
+    if (!name) {
+      name = extractNameFromAltAttributes(email);
     }
     
     // Clean up the name if found
     if (name) {
-      // Remove common suffixes like "(@username)" or "- Title"
+      // Remove common suffixes and prefixes
       name = name.replace(/\s*\([^)]*\).*$/, '').replace(/\s*[-–—].*$/, '').trim();
       
       // Extract first name for greeting
@@ -559,6 +545,285 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     document.getElementById('email-message').value = messagePrefix;
     
     showEmailPanel();
+  }
+
+  // Method 1: Extract name from Product Hunt moderator interface
+  function extractNameFromModeratorInterface(email) {
+    console.log('Searching moderator interface for name...');
+    
+    // Find the email element
+    const emailElements = document.querySelectorAll('a[href*="mailto"], a[title*="email"], *');
+    let emailElement = null;
+    
+    for (const element of emailElements) {
+      if (element.textContent.includes(email) || element.href?.includes(email)) {
+        emailElement = element;
+        break;
+      }
+    }
+    
+    if (!emailElement) {
+      // Try finding by text content
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+      
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent.includes(email)) {
+          emailElement = walker.currentNode.parentElement;
+          break;
+        }
+      }
+    }
+    
+    if (emailElement) {
+      console.log('Found email element:', emailElement);
+      
+      // Pattern A: Look for name in the same container/section
+      const container = emailElement.closest('div, section, article, .row, .item, .entry');
+      if (container) {
+        console.log('Searching in container:', container);
+        
+        // Look for "Hunter" or "Makers" labels followed by email
+        const containerText = container.textContent;
+        
+        // Extract pattern: "Hunter [name] email" or "Makers [name] email"
+        const hunterPattern = /Hunter\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+[\w.+-]+@[\w.-]+/;
+        const makerPattern = /Makers?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+[\w.+-]+@[\w.-]+/;
+        
+        let match = containerText.match(hunterPattern) || containerText.match(makerPattern);
+        if (match && match[1]) {
+          console.log('Found name from Hunter/Maker pattern:', match[1]);
+          return match[1].trim();
+        }
+        
+        // Pattern B: Look for names that appear before the email in the same container
+        const lines = containerText.split('\n').map(line => line.trim()).filter(line => line);
+        const emailLineIndex = lines.findIndex(line => line.includes(email));
+        
+        if (emailLineIndex > 0) {
+          // Check previous lines for names
+          for (let i = emailLineIndex - 1; i >= Math.max(0, emailLineIndex - 3); i--) {
+            const line = lines[i];
+            // Look for names (2-3 words, properly capitalized)
+            if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(line) && line.length > 3) {
+              console.log('Found name from previous line:', line);
+              return line;
+            }
+          }
+        }
+        
+        // Pattern C: Look for nearby elements with names
+        const nameElements = container.querySelectorAll('span, div, p, strong, b');
+        for (const element of nameElements) {
+          const text = element.textContent.trim();
+          if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(text) && 
+              text.length > 3 && 
+              !text.includes('@') &&
+              !text.includes('Hunter') &&
+              !text.includes('Maker')) {
+            console.log('Found name in nearby element:', text);
+            return text;
+          }
+        }
+        
+        // Pattern D: Look for black background elements (like "Jacky Zheng" tooltip)
+        const darkElements = container.querySelectorAll('[style*="background"], .tooltip, .popup, .overlay');
+        for (const element of darkElements) {
+          const text = element.textContent.trim();
+          if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(text) && text.length > 3) {
+            console.log('Found name in dark element:', text);
+            return text;
+          }
+        }
+      }
+      
+      // Pattern E: Look for data attributes or aria-labels
+      const nameFromAttributes = extractNameFromAttributes(emailElement);
+      if (nameFromAttributes) {
+        return nameFromAttributes;
+      }
+    }
+    
+    return null;
+  }
+
+  // Method 2: Extract name from general page context (JSON patterns)
+  function extractNameFromPageContext(email) {
+    console.log('Searching general page context...');
+    
+    const pageSource = document.documentElement.outerHTML;
+    const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // JSON patterns for user objects
+    const jsonPatterns = [
+      new RegExp(`\\{[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*\\}`, 'i'),
+      new RegExp(`\\{[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*\\}`, 'i'),
+      new RegExp(`"user"\\s*:\\s*\\{[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*\\}`, 'i'),
+      new RegExp(`"user"\\s*:\\s*\\{[^{}]*"email"\\s*:\\s*"${emailPattern}"[^{}]*"name"\\s*:\\s*"([^"]+)"[^{}]*\\}`, 'i')
+    ];
+    
+    for (const pattern of jsonPatterns) {
+      const match = pageSource.match(pattern);
+      if (match && match[1]) {
+        console.log('Found name from JSON pattern:', match[1]);
+        return match[1].trim();
+      }
+    }
+    
+    return null;
+  }
+
+  // Method 3: Extract name from username patterns
+  function extractNameFromUsernamePatterns(email) {
+    console.log('Searching username patterns...');
+    
+    const pageSource = document.documentElement.outerHTML;
+    const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Extract username from email (part before @)
+    const emailUsername = email.split('@')[0];
+    
+    // Look for @username links associated with this email
+    const usernamePattern = new RegExp(`href="[^"]*/@([^"]+)"[^>]*>[^<]*${emailPattern}|${emailPattern}[^<]*<[^>]*href="[^"]*/@([^"]+)"`, 'i');
+    const usernameMatch = pageSource.match(usernamePattern);
+    
+    if (usernameMatch) {
+      const username = usernameMatch[1] || usernameMatch[2];
+      console.log('Found username associated with email:', username);
+      
+      // Now look for the display name for this username
+      const displayNamePattern = new RegExp(`alt="([^"]+)"[^>]*>[^<]*href="[^"]*/@${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'i');
+      const displayNameMatch = pageSource.match(displayNamePattern);
+      
+      if (displayNameMatch && displayNameMatch[1]) {
+        console.log('Found display name for username:', displayNameMatch[1]);
+        return displayNameMatch[1].trim();
+      } else {
+        // Fallback: Convert username to readable name
+        // e.g., "romeobellon" -> "Romeo Bellon", "rohanrecommends" -> "Rohan Recommends"
+        const cleanUsername = username.replace(/[0-9]+$/, ''); // Remove trailing numbers
+        const nameParts = cleanUsername.split(/[._-]/);
+        const generatedName = nameParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+        console.log('Generated name from username:', generatedName);
+        return generatedName;
+      }
+    }
+    
+    return null;
+  }
+
+  // Method 4: Extract name from email username
+  function extractNameFromEmailUsername(email) {
+    console.log('Extracting name from email username...');
+    
+    const username = email.split('@')[0];
+    
+    // Handle common patterns like "jacky.business" or "jackybusiness"
+    let nameParts = [];
+    
+    if (username.includes('.')) {
+      nameParts = username.split('.');
+    } else if (username.includes('_')) {
+      nameParts = username.split('_');
+    } else {
+      // Try to split camelCase or find word boundaries
+      const camelSplit = username.split(/(?=[A-Z])/);
+      if (camelSplit.length > 1) {
+        nameParts = camelSplit;
+      } else {
+        // Look for common business suffixes
+        const businessSuffixes = ['business', 'co', 'company', 'corp', 'inc', 'llc'];
+        let cleanUsername = username;
+        
+        for (const suffix of businessSuffixes) {
+          if (username.toLowerCase().endsWith(suffix)) {
+            cleanUsername = username.slice(0, -suffix.length);
+            break;
+          }
+        }
+        
+        nameParts = [cleanUsername];
+      }
+    }
+    
+    // Capitalize and clean parts
+    const name = nameParts
+      .filter(part => part && part.length > 1)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+    
+    console.log('Generated name from email username:', name);
+    return name || null;
+  }
+
+  // Method 5: Extract name from alt attributes
+  function extractNameFromAltAttributes(email) {
+    console.log('Searching alt attributes...');
+    
+    const pageSource = document.documentElement.outerHTML;
+    const emailPattern = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Find image alt attributes that might contain names near the email
+    const emailRegex = new RegExp(emailPattern, 'gi');
+    let match;
+    
+    while ((match = emailRegex.exec(pageSource)) !== null) {
+      const emailIndex = match.index;
+      
+      // Look in a wider context around the email (300 chars each direction)
+      const contextStart = Math.max(0, emailIndex - 300);
+      const contextEnd = Math.min(pageSource.length, emailIndex + email.length + 300);
+      const context = pageSource.substring(contextStart, contextEnd);
+      
+      // Look for alt attributes with names
+      const altMatches = context.match(/alt="([^"]+)"/g);
+      if (altMatches) {
+        for (const altMatch of altMatches) {
+          const altText = altMatch.match(/alt="([^"]+)"/)[1];
+          // Check if this looks like a person's name (2-4 words, each starting with capital)
+          if (/^[A-Z][a-z]+(?: [A-Z][a-z]*){1,3}$/.test(altText) && altText.length > 3) {
+            console.log('Found name from alt attribute:', altText);
+            return altText.trim();
+          }
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  // Helper function to extract names from element attributes
+  function extractNameFromAttributes(element) {
+    const attributes = ['title', 'aria-label', 'data-name', 'data-title', 'alt'];
+    
+    for (const attr of attributes) {
+      const value = element.getAttribute(attr);
+      if (value && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(value)) {
+        console.log(`Found name from ${attr} attribute:`, value);
+        return value;
+      }
+    }
+    
+    // Check parent elements too
+    let parent = element.parentElement;
+    let depth = 0;
+    while (parent && depth < 3) {
+      for (const attr of attributes) {
+        const value = parent.getAttribute(attr);
+        if (value && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(value)) {
+          console.log(`Found name from parent ${attr} attribute:`, value);
+          return value;
+        }
+      }
+      parent = parent.parentElement;
+      depth++;
+    }
+    
+    return null;
   }
 
   // Function to make emails clickable
