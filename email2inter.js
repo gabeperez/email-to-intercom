@@ -1219,36 +1219,45 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     // First, handle Product Hunt moderation interface emails specifically
     handleProductHuntModerationEmails();
     
-    // For general email detection, use a more conservative approach
-    // Only process emails that are not already processed and are in safe containers
-    const safeContainers = document.querySelectorAll('div, span, p, td, li, a');
+    // For general email detection, be very precise - only target elements that contain ONLY the email
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
     
-    for (const container of safeContainers) {
-      // Skip if already processed or not in DOM
-      if (container.classList.contains('email-intercom-processed') || !container.parentNode) {
-        continue;
+    const textNodes = [];
+    while (walker.nextNode()) {
+      const text = walker.currentNode.textContent.trim();
+      if (emailRegex.test(text) && text === walker.currentNode.textContent.trim()) {
+        // This text node contains only an email
+        textNodes.push(walker.currentNode);
       }
+    }
+    
+    for (const textNode of textNodes) {
+      const email = textNode.textContent.trim();
+      const parent = textNode.parentElement;
       
-      const text = container.textContent;
-      const emailMatches = [...text.matchAll(emailRegex)];
-      
-      if (emailMatches.length > 0) {
-        // Use the safer approach: modify the container instead of replacing text nodes
-        container.style.cssText += 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500; background: rgba(0, 123, 255, 0.1); padding: 2px 4px; border-radius: 3px;';
-        container.title = 'Click to send email via Intercom';
-        container.classList.add('email-intercom-processed');
+      // Only process if parent is a simple element and not already processed
+      if (parent && 
+          !parent.classList.contains('email-intercom-processed') && 
+          parent.textContent.trim() === email &&
+          (parent.tagName === 'SPAN' || parent.tagName === 'A' || parent.tagName === 'TD')) {
         
-        // Add click handler for the first email found
-        const firstEmail = emailMatches[0][0];
-        container.setAttribute('data-email', firstEmail);
+        parent.style.cssText += 'color: #007bff !important; text-decoration: underline !important; cursor: pointer !important;';
+        parent.title = 'Click to send email via Intercom';
+        parent.setAttribute('data-email', email);
+        parent.classList.add('email-intercom-processed');
         
-        container.addEventListener('click', (e) => {
+        parent.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          handleEmailClick(e, firstEmail);
+          handleEmailClick(e, email);
         });
         
-        console.log(`✅ Made general email clickable: ${firstEmail}`);
+        console.log(`✅ Made general email clickable: ${email}`);
       }
     }
   }
@@ -1257,115 +1266,90 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
   function handleProductHuntModerationEmails() {
     console.log('Checking for Product Hunt moderation interface emails...');
     
-    // Look for elements that contain the envelope icon (📧) followed by an email
-    // Use a more conservative selector to avoid interfering with React/framework elements
-    const emailElements = document.querySelectorAll('div, span, p, td, li');
+    // Look for the specific email span elements in Product Hunt's DOM structure
+    // Target only the actual email text spans, not their containers
+    const emailSpans = document.querySelectorAll('span[title*="@"]');
     
-    for (const element of emailElements) {
+    for (const span of emailSpans) {
       // Skip if already processed or if element is not in the DOM
-      if (element.classList.contains('email-intercom-processed') || !element.parentNode) {
+      if (span.classList.contains('email-intercom-processed') || !span.parentNode) {
         continue;
       }
       
-      const text = element.textContent;
+      const email = span.textContent.trim();
+      const title = span.getAttribute('title');
       
-      // Check if this element contains the Product Hunt email pattern: 📧email@domain.com✓
-      const phEmailPattern = /📧([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7})✓?/g;
-      const matches = [...text.matchAll(phEmailPattern)];
-      
-      if (matches.length > 0) {
-        console.log('Found Product Hunt moderation email element:', element, 'with matches:', matches);
+      // Check if this is actually an email
+      if (emailRegex.test(email) && title && title.includes('@')) {
+        console.log('Found Product Hunt email span:', span, 'email:', email);
         
-        for (const match of matches) {
-          const email = match[1];
-          const fullMatch = match[0];
-          
-          // Check if this email is already processed
-          if (element.classList.contains('email-intercom-processed')) {
-            continue;
-          }
-          
-          // Use a safer approach: add click handler to the existing element
-          // instead of replacing DOM nodes
-          element.style.cssText += 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500; background: rgba(0, 123, 255, 0.1); padding: 2px 4px; border-radius: 3px;';
-          element.title = 'Click to send email via Intercom';
-          element.setAttribute('data-email', email);
-          
-          // Add click handler
-          element.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleEmailClick(e, email);
-          });
-          
-          // Mark as processed
-          element.classList.add('email-intercom-processed');
-          
-          console.log(`✅ Made Product Hunt email clickable: ${email}`);
-        }
+        // Style as a normal clickable link (blue text, underline, no background)
+        span.style.cssText += 'color: #007bff !important; text-decoration: underline !important; cursor: pointer !important;';
+        span.title = 'Click to send email via Intercom';
+        span.setAttribute('data-email', email);
+        
+        // Add click handler
+        span.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleEmailClick(e, email);
+        });
+        
+        // Mark as processed
+        span.classList.add('email-intercom-processed');
+        
+        console.log(`✅ Made Product Hunt email clickable: ${email}`);
       }
     }
     
-    // Also look for emails in "Hunter" sections specifically
-    // Use more conservative selectors to avoid interfering with framework elements
-    const hunterSections = document.querySelectorAll('div, section, article, .row, .item, .entry, .card');
-    for (const section of hunterSections) {
-      // Skip if already processed or not in DOM
-      if (section.classList.contains('email-intercom-processed') || !section.parentNode) {
-        continue;
+    // Also look for emails in the specific Product Hunt email pattern: 📧email@domain.com✓
+    const phEmailPattern = /📧([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7})✓?/g;
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    const textNodes = [];
+    while (walker.nextNode()) {
+      if (walker.currentNode.textContent.match(phEmailPattern)) {
+        textNodes.push(walker.currentNode);
       }
-      
-      const text = section.textContent;
-      if (text.includes('Hunter') && text.includes('@')) {
-        console.log('Found Hunter section with email:', section);
+    }
+    
+    for (const textNode of textNodes) {
+      const matches = [...textNode.textContent.matchAll(phEmailPattern)];
+      for (const match of matches) {
+        const email = match[1];
+        const fullMatch = match[0];
         
-        // Look for email patterns in this section
-        const emailMatches = [...text.matchAll(emailRegex)];
-        for (const match of emailMatches) {
-          const email = match[0];
-          
-          // Check if this email is already processed
-          if (section.querySelector('.email-intercom-processed')) {
-            continue;
-          }
-          
-          // Find the specific text node containing the email
-          const walker = document.createTreeWalker(
-            section,
-            NodeFilter.SHOW_TEXT,
-            null,
-            false
-          );
-          
-          let textNode = null;
-          while (walker.nextNode()) {
-            if (walker.currentNode.textContent.includes(email)) {
-              textNode = walker.currentNode;
-              break;
-            }
-          }
-          
-          if (textNode && textNode.parentNode) {
-            // Use safer approach: modify the parent element instead of replacing text nodes
-            const parentElement = textNode.parentElement;
-            if (parentElement && !parentElement.classList.contains('email-intercom-processed')) {
-              parentElement.style.cssText += 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500; background: rgba(0, 123, 255, 0.1); padding: 2px 4px; border-radius: 3px;';
-              parentElement.title = 'Click to send email via Intercom';
-              parentElement.setAttribute('data-email', email);
-              parentElement.classList.add('email-intercom-processed');
+        // Find the parent span or div that contains this text
+        let parent = textNode.parentElement;
+        while (parent && !parent.classList.contains('email-intercom-processed')) {
+          if (parent.tagName === 'SPAN' || parent.tagName === 'DIV') {
+            // Only style if this is a small container (likely just the email)
+            if (parent.textContent.trim() === fullMatch || parent.textContent.trim() === email) {
+              parent.style.cssText += 'color: #007bff !important; text-decoration: underline !important; cursor: pointer !important;';
+              parent.title = 'Click to send email via Intercom';
+              parent.setAttribute('data-email', email);
+              parent.classList.add('email-intercom-processed');
               
-              parentElement.addEventListener('click', (e) => {
+              parent.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 handleEmailClick(e, email);
               });
               
-              console.log(`✅ Made Hunter email clickable: ${email}`);
+              console.log(`✅ Made Product Hunt pattern email clickable: ${email}`);
+              break;
             }
           }
+          parent = parent.parentElement;
         }
       }
     }
+    
   }
 
   // Debounce function
