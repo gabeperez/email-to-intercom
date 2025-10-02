@@ -305,6 +305,18 @@ function injectStyles() {
       color: #721c24;
     }
 
+    /* Product Hunt Email Styling */
+    .email-intercom-processed {
+      position: relative;
+    }
+    
+    .email-intercom-processed::after {
+      content: "📧";
+      margin-left: 4px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+    
     /* Mobile Responsiveness */
     @media (max-width: 480px) {
       #email-intercom-panel {
@@ -552,20 +564,28 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
 
   // Method 1: Extract name from Product Hunt moderator interface
   // Priority order:
-  // 1. Native tooltips/hover elements (HIGHEST)
-  // 2. Launch Team matching (SECOND)
-  // 3. Traditional patterns (THIRD)
+  // 1. Product Hunt Hunter section (HIGHEST)
+  // 2. Native tooltips/hover elements (SECOND)
+  // 3. Launch Team matching (THIRD)
+  // 4. Traditional patterns (FOURTH)
   function extractNameFromModeratorInterface(email) {
     console.log('Searching moderator interface for name...');
     
-    // NEW: Native Tooltip/Hover Detection (HIGHEST PRIORITY)
+    // NEW: Product Hunt Hunter Section Detection (HIGHEST PRIORITY)
+    const hunterSectionName = extractNameFromHunterSection(email);
+    if (hunterSectionName) {
+      console.log('Found name from Hunter section:', hunterSectionName);
+      return hunterSectionName;
+    }
+    
+    // Native Tooltip/Hover Detection (SECOND PRIORITY)
     const nativeTooltipName = extractNameFromNativeTooltips(email);
     if (nativeTooltipName) {
       console.log('Found name from native tooltip:', nativeTooltipName);
       return nativeTooltipName;
     }
     
-    // Product Hunt Launch Team Matching (SECOND PRIORITY)
+    // Product Hunt Launch Team Matching (THIRD PRIORITY)
     const launchTeamName = extractNameFromLaunchTeam(email);
     if (launchTeamName) {
       console.log('Found name from Launch Team matching:', launchTeamName);
@@ -826,6 +846,76 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     }
     
     return isValidPattern;
+  }
+
+  // NEW: Extract name from Product Hunt Hunter section (HIGHEST PRIORITY)
+  function extractNameFromHunterSection(email) {
+    console.log('Searching Hunter section for name...');
+    
+    // Look for "Hunter" sections that contain the email
+    const hunterSections = document.querySelectorAll('*');
+    
+    for (const section of hunterSections) {
+      const text = section.textContent;
+      
+      // Check if this section contains both "Hunter" and the email
+      if (text.includes('Hunter') && text.includes(email)) {
+        console.log('Found Hunter section with email:', section);
+        
+        // Look for the name pattern in the Hunter section
+        // Pattern: "Hunter [Name] [optional arrow] [email]"
+        const hunterNamePattern = /Hunter\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:↗)?\s*[📧]?[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}/i;
+        const match = text.match(hunterNamePattern);
+        
+        if (match && match[1]) {
+          const name = match[1].trim();
+          console.log('Found name from Hunter section pattern:', name);
+          return name;
+        }
+        
+        // Alternative pattern: Look for names that appear before the email in the same section
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+        const emailLineIndex = lines.findIndex(line => line.includes(email));
+        
+        if (emailLineIndex > 0) {
+          // Check previous lines for names
+          for (let i = emailLineIndex - 1; i >= Math.max(0, emailLineIndex - 3); i--) {
+            const line = lines[i];
+            // Look for names (2-3 words, properly capitalized, not containing "Hunter")
+            if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(line) && 
+                line.length > 3 && 
+                !line.includes('Hunter') &&
+                !line.includes('@')) {
+              console.log('Found name from previous line in Hunter section:', line);
+              return line;
+            }
+          }
+        }
+        
+        // Look for names in the same container as the email
+        const container = section.closest('div, section, article, .row, .item, .entry, .card');
+        if (container) {
+          const nameElements = container.querySelectorAll('span, div, p, strong, b, h1, h2, h3, h4, h5, h6');
+          for (const element of nameElements) {
+            const text = element.textContent.trim();
+            // Look for names that don't contain email or "Hunter"
+            if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(text) && 
+                text.length > 3 && 
+                text.length <= 50 &&
+                !text.includes('@') &&
+                !text.includes('Hunter') &&
+                !text.includes('↗') &&
+                !text.includes('📧')) {
+              console.log('Found name in Hunter section container:', text);
+              return text;
+            }
+          }
+        }
+      }
+    }
+    
+    console.log('No Hunter section name found');
+    return null;
   }
 
   // Extract name by matching email with Launch Team members
@@ -1124,8 +1214,12 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     return null;
   }
 
-  // Function to make emails clickable
+  // Enhanced function to make emails clickable with Product Hunt moderation interface support
   function makeEmailsClickable() {
+    // First, handle Product Hunt moderation interface emails specifically
+    handleProductHuntModerationEmails();
+    
+    // Then handle general email detection
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     const nodesToReplace = [];
 
@@ -1163,6 +1257,122 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     }
   }
 
+  // Specialized function to handle Product Hunt moderation interface emails
+  function handleProductHuntModerationEmails() {
+    console.log('Checking for Product Hunt moderation interface emails...');
+    
+    // Look for elements that contain the envelope icon (📧) followed by an email
+    const emailElements = document.querySelectorAll('*');
+    
+    for (const element of emailElements) {
+      const text = element.textContent;
+      
+      // Check if this element contains the Product Hunt email pattern: 📧email@domain.com✓
+      const phEmailPattern = /📧([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7})✓?/g;
+      const matches = [...text.matchAll(phEmailPattern)];
+      
+      if (matches.length > 0) {
+        console.log('Found Product Hunt moderation email element:', element, 'with matches:', matches);
+        
+        for (const match of matches) {
+          const email = match[1];
+          const fullMatch = match[0];
+          
+          // Check if this email is already processed
+          if (element.classList.contains('email-intercom-processed')) {
+            continue;
+          }
+          
+          // Create a clickable version of the email
+          const emailLink = document.createElement('a');
+          emailLink.href = '#';
+          emailLink.textContent = fullMatch;
+          emailLink.style.cssText = 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500; background: rgba(0, 123, 255, 0.1); padding: 2px 4px; border-radius: 3px;';
+          emailLink.title = 'Click to send email via Intercom';
+          
+          // Add click handler
+          emailLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleEmailClick(e, email);
+          });
+          
+          // Replace the text content with the clickable link
+          if (element.textContent === fullMatch) {
+            // If the entire element is just the email, replace it
+            element.parentNode.replaceChild(emailLink, element);
+          } else {
+            // If the email is part of larger text, replace just that part
+            const newText = text.replace(fullMatch, emailLink.outerHTML);
+            element.innerHTML = newText;
+          }
+          
+          // Mark as processed
+          element.classList.add('email-intercom-processed');
+          
+          console.log(`✅ Made Product Hunt email clickable: ${email}`);
+        }
+      }
+    }
+    
+    // Also look for emails in "Hunter" sections specifically
+    const hunterSections = document.querySelectorAll('*');
+    for (const section of hunterSections) {
+      const text = section.textContent;
+      if (text.includes('Hunter') && text.includes('@')) {
+        console.log('Found Hunter section with email:', section);
+        
+        // Look for email patterns in this section
+        const emailMatches = [...text.matchAll(emailRegex)];
+        for (const match of emailMatches) {
+          const email = match[0];
+          
+          // Check if this email is already processed
+          if (section.querySelector('.email-intercom-processed')) {
+            continue;
+          }
+          
+          // Find the specific text node containing the email
+          const walker = document.createTreeWalker(
+            section,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          );
+          
+          let textNode = null;
+          while (walker.nextNode()) {
+            if (walker.currentNode.textContent.includes(email)) {
+              textNode = walker.currentNode;
+              break;
+            }
+          }
+          
+          if (textNode && textNode.parentNode) {
+            // Create clickable link
+            const link = document.createElement('a');
+            link.href = '#';
+            link.textContent = email;
+            link.style.cssText = 'color: #007bff; text-decoration: underline; cursor: pointer; font-weight: 500; background: rgba(0, 123, 255, 0.1); padding: 2px 4px; border-radius: 3px;';
+            link.title = 'Click to send email via Intercom';
+            link.classList.add('email-intercom-processed');
+            
+            link.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleEmailClick(e, email);
+            });
+            
+            // Replace the text node
+            textNode.parentNode.replaceChild(link, textNode);
+            
+            console.log(`✅ Made Hunter email clickable: ${email}`);
+          }
+        }
+      }
+    }
+  }
+
   // Debounce function
   function debounce(func, wait) {
     let timeout;
@@ -1177,7 +1387,16 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
 
   // Function to initialize the extension
   function initializeExtension() {
-      console.log('Initializing Email to Intercom Linker');
+    console.log('🚀 Initializing Email to Intercom Linker');
+    console.log('📍 Current URL:', window.location.href);
+    
+    // Check if this is a Product Hunt moderation page
+    const isProductHuntModeration = window.location.href.includes('producthunt.com/my/moderation');
+    if (isProductHuntModeration) {
+      console.log('🎯 Product Hunt moderation page detected! Enhanced email detection enabled.');
+    }
+    
+    console.log('🔍 Looking for emails on the page...');
     
     // Inject styles first
     injectStyles();
@@ -1185,16 +1404,20 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     // Create email panel (but don't show it yet)
     createEmailPanel();
     
-      makeEmailsClickable();
+    // Make emails clickable
+    makeEmailsClickable();
 
-      // Set up MutationObserver
-      const observer = new MutationObserver(mutations => {
-        if (mutations.some(mutation => mutation.type === 'childList' && mutation.addedNodes.length > 0)) {
-          debouncedMakeEmailsClickable();
-        }
-      });
+    // Set up MutationObserver for dynamic content
+    const observer = new MutationObserver(mutations => {
+      if (mutations.some(mutation => mutation.type === 'childList' && mutation.addedNodes.length > 0)) {
+        console.log('🔄 Page content changed, re-scanning for emails...');
+        debouncedMakeEmailsClickable();
+      }
+    });
 
-      observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    console.log('✅ Email to Intercom Linker initialized successfully');
   }
 
   // Multiple initialization strategies to handle different loading scenarios
