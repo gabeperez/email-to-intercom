@@ -510,28 +510,30 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
     
     console.log('Looking for name associated with email:', email);
     
-    // Method 1: Look for Product Hunt moderator interface patterns (PRIMARY)
-    // - Native tooltips/hover elements (HIGHEST PRIORITY)
-    // - Launch Team matching (SECOND PRIORITY)
-    // - Traditional patterns (THIRD PRIORITY)
-    name = extractNameFromModeratorInterface(email);
+    // Method 1: Look for Product Hunt Hunter section patterns (HIGHEST PRIORITY)
+    name = extractNameFromHunterSection(email);
     
-    // Method 2: If no name found, try general page patterns (FALLBACK 1)
+    // Method 2: If no name found, try other Product Hunt patterns
+    if (!name) {
+      name = extractNameFromModeratorInterface(email);
+    }
+    
+    // Method 3: If no name found, try general page patterns (FALLBACK 1)
     if (!name) {
       name = extractNameFromPageContext(email);
     }
     
-    // Method 3: Look for username-based patterns (FALLBACK 2)
+    // Method 4: Look for username-based patterns (FALLBACK 2)
     if (!name) {
       name = extractNameFromUsernamePatterns(email);
     }
     
-    // Method 4: Extract from email username as final fallback (FALLBACK 3)
+    // Method 5: Extract from email username as final fallback (FALLBACK 3)
     if (!name) {
       name = extractNameFromEmailUsername(email);
     }
     
-    // Method 5: Alt attributes search (FALLBACK 4)
+    // Method 6: Alt attributes search (FALLBACK 4)
     if (!name) {
       name = extractNameFromAltAttributes(email);
     }
@@ -852,7 +854,59 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
   function extractNameFromHunterSection(email) {
     console.log('Searching Hunter section for name...');
     
-    // Look for "Hunter" sections that contain the email
+    // Look for the specific email span first
+    const emailSpans = document.querySelectorAll('span[title*="@"]');
+    let emailSpan = null;
+    
+    for (const span of emailSpans) {
+      if (span.textContent.trim() === email || span.getAttribute('title') === email) {
+        emailSpan = span;
+        break;
+      }
+    }
+    
+    if (emailSpan) {
+      console.log('Found email span:', emailSpan);
+      
+      // Look for the name in the same UserInfo container
+      const userInfoContainer = emailSpan.closest('[data-sentry-component="UserInfo"]');
+      if (userInfoContainer) {
+        console.log('Found UserInfo container:', userInfoContainer);
+        
+        // Look for the name in aria-label of the user link
+        const userLink = userInfoContainer.querySelector('a[aria-label]');
+        if (userLink) {
+          const ariaLabel = userLink.getAttribute('aria-label');
+          console.log('Found aria-label:', ariaLabel);
+          
+          // Extract name from aria-label (e.g., "Ankit Kachhap")
+          if (ariaLabel && !ariaLabel.includes('@') && !ariaLabel.includes('Suspicious')) {
+            // Clean up the name (remove status indicators)
+            const cleanName = ariaLabel.replace(/\s*\([^)]*\).*$/, '').trim();
+            if (cleanName && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName)) {
+              console.log('Found name from aria-label:', cleanName);
+              return cleanName;
+            }
+          }
+        }
+        
+        // Alternative: Look for the name in the link text content
+        const nameLinks = userInfoContainer.querySelectorAll('a[href*="/@"]');
+        for (const link of nameLinks) {
+          const linkText = link.textContent.trim();
+          console.log('Found link text:', linkText);
+          
+          // Clean up the name (remove status indicators like "(Suspicious)")
+          const cleanName = linkText.replace(/\s*\([^)]*\).*$/, '').trim();
+          if (cleanName && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName) && !cleanName.includes('@')) {
+            console.log('Found name from link text:', cleanName);
+            return cleanName;
+          }
+        }
+      }
+    }
+    
+    // Fallback: Look for "Hunter" sections that contain the email
     const hunterSections = document.querySelectorAll('*');
     
     for (const section of hunterSections) {
@@ -862,52 +916,30 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
       if (text.includes('Hunter') && text.includes(email)) {
         console.log('Found Hunter section with email:', section);
         
-        // Look for the name pattern in the Hunter section
-        // Pattern: "Hunter [Name] [optional arrow] [email]"
-        const hunterNamePattern = /Hunter\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:↗)?\s*[📧]?[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}/i;
-        const match = text.match(hunterNamePattern);
-        
-        if (match && match[1]) {
-          const name = match[1].trim();
-          console.log('Found name from Hunter section pattern:', name);
-          return name;
-        }
-        
-        // Alternative pattern: Look for names that appear before the email in the same section
-        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
-        const emailLineIndex = lines.findIndex(line => line.includes(email));
-        
-        if (emailLineIndex > 0) {
-          // Check previous lines for names
-          for (let i = emailLineIndex - 1; i >= Math.max(0, emailLineIndex - 3); i--) {
-            const line = lines[i];
-            // Look for names (2-3 words, properly capitalized, not containing "Hunter")
-            if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(line) && 
-                line.length > 3 && 
-                !line.includes('Hunter') &&
-                !line.includes('@')) {
-              console.log('Found name from previous line in Hunter section:', line);
-              return line;
-            }
-          }
-        }
-        
         // Look for names in the same container as the email
         const container = section.closest('div, section, article, .row, .item, .entry, .card');
         if (container) {
-          const nameElements = container.querySelectorAll('span, div, p, strong, b, h1, h2, h3, h4, h5, h6');
+          // Look for aria-label attributes first
+          const ariaElements = container.querySelectorAll('[aria-label]');
+          for (const element of ariaElements) {
+            const ariaLabel = element.getAttribute('aria-label');
+            if (ariaLabel && !ariaLabel.includes('@') && !ariaLabel.includes('Suspicious')) {
+              const cleanName = ariaLabel.replace(/\s*\([^)]*\).*$/, '').trim();
+              if (cleanName && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName)) {
+                console.log('Found name from aria-label in Hunter section:', cleanName);
+                return cleanName;
+              }
+            }
+          }
+          
+          // Look for link text content
+          const nameElements = container.querySelectorAll('a[href*="/@"]');
           for (const element of nameElements) {
             const text = element.textContent.trim();
-            // Look for names that don't contain email or "Hunter"
-            if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(text) && 
-                text.length > 3 && 
-                text.length <= 50 &&
-                !text.includes('@') &&
-                !text.includes('Hunter') &&
-                !text.includes('↗') &&
-                !text.includes('📧')) {
-              console.log('Found name in Hunter section container:', text);
-              return text;
+            const cleanName = text.replace(/\s*\([^)]*\).*$/, '').trim();
+            if (cleanName && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName) && !cleanName.includes('@')) {
+              console.log('Found name from link in Hunter section:', cleanName);
+              return cleanName;
             }
           }
         }
@@ -1246,18 +1278,21 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
           parent.textContent.trim() === email &&
           (parent.tagName === 'SPAN' || parent.tagName === 'A' || parent.tagName === 'TD')) {
         
+        // Extract clean email, removing any status text like "(verified)"
+        const cleanEmail = email.replace(/\s*\([^)]*\).*$/, '').trim();
+        
         parent.style.cssText += 'color: #007bff !important; text-decoration: underline !important; cursor: pointer !important;';
         parent.title = 'Click to send email via Intercom';
-        parent.setAttribute('data-email', email);
+        parent.setAttribute('data-email', cleanEmail);
         parent.classList.add('email-intercom-processed');
         
         parent.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          handleEmailClick(e, email);
+          handleEmailClick(e, cleanEmail);
         });
         
-        console.log(`✅ Made general email clickable: ${email}`);
+        console.log(`✅ Made general email clickable: ${cleanEmail}`);
       }
     }
   }
@@ -1279,20 +1314,22 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
       const email = span.textContent.trim();
       const title = span.getAttribute('title');
       
-      // Check if this is actually an email
+      // Check if this is actually an email and extract clean email
       if (emailRegex.test(email) && title && title.includes('@')) {
-        console.log('Found Product Hunt email span:', span, 'email:', email);
+        // Extract just the email address, removing any status text like "(verified)"
+        const cleanEmail = email.replace(/\s*\([^)]*\).*$/, '').trim();
+        console.log('Found Product Hunt email span:', span, 'original:', email, 'clean:', cleanEmail);
         
         // Style as a normal clickable link (blue text, underline, no background)
         span.style.cssText += 'color: #007bff !important; text-decoration: underline !important; cursor: pointer !important;';
         span.title = 'Click to send email via Intercom';
-        span.setAttribute('data-email', email);
+        span.setAttribute('data-email', cleanEmail);
         
         // Add click handler
         span.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          handleEmailClick(e, email);
+          handleEmailClick(e, cleanEmail);
         });
         
         // Mark as processed
@@ -1324,6 +1361,9 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         const email = match[1];
         const fullMatch = match[0];
         
+        // Clean the email, removing any status text
+        const cleanEmail = email.replace(/\s*\([^)]*\).*$/, '').trim();
+        
         // Find the parent span or div that contains this text
         let parent = textNode.parentElement;
         while (parent && !parent.classList.contains('email-intercom-processed')) {
@@ -1332,16 +1372,16 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
             if (parent.textContent.trim() === fullMatch || parent.textContent.trim() === email) {
               parent.style.cssText += 'color: #007bff !important; text-decoration: underline !important; cursor: pointer !important;';
               parent.title = 'Click to send email via Intercom';
-              parent.setAttribute('data-email', email);
+              parent.setAttribute('data-email', cleanEmail);
               parent.classList.add('email-intercom-processed');
               
               parent.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                handleEmailClick(e, email);
+                handleEmailClick(e, cleanEmail);
               });
               
-              console.log(`✅ Made Product Hunt pattern email clickable: ${email}`);
+              console.log(`✅ Made Product Hunt pattern email clickable: ${cleanEmail}`);
               break;
             }
           }
