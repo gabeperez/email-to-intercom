@@ -197,3 +197,21 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     attemptCount = 0;
   }
 });
+
+// Listen for extension installation
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === 'install') {
+    console.log('Extension installed for the first time');
+    
+    // Check if settings are empty (first time install)
+    const settings = await chrome.storage.sync.get([
+      'intercomToken', 'intercomAdminId', 'intercomRegion', 'intercomTeamId'
+    ]);
+    
+    // If no credentials are configured, open the options page
+    if (!settings.intercomToken || !settings.intercomAdminId) {
+      console.log('No credentials found, opening settings page');
+      chrome.runtime.openOptionsPage();
+    }
+  }
+});

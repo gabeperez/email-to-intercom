@@ -8,6 +8,17 @@ async function loadSettings() {
       'intercomToken', 'intercomAdminId', 'intercomRegion', 'intercomTeamId', 'allowedDomains'
     ]);
     
+    // Check if this is a new user (no credentials configured)
+    const isNewUser = !result.intercomToken || !result.intercomAdminId;
+    
+    if (isNewUser) {
+      // Show welcome message for new users
+      const welcomeMessage = document.getElementById('welcome-message');
+      if (welcomeMessage) {
+        welcomeMessage.style.display = 'block';
+      }
+    }
+    
     if (result.intercomToken) document.getElementById('token').value = result.intercomToken;
     if (result.intercomAdminId) document.getElementById('adminId').value = result.intercomAdminId;
     if (result.intercomRegion) document.getElementById('region').value = result.intercomRegion;
@@ -85,6 +96,12 @@ async function saveSettings(e) {
     }
     
     showStatus(statusMessage, 'success');
+    
+    // Hide welcome message after successful save
+    const welcomeMessage = document.getElementById('welcome-message');
+    if (welcomeMessage) {
+      welcomeMessage.style.display = 'none';
+    }
   } catch (error) {
     console.error('Error saving settings:', error);
     showStatus('Error saving settings: ' + error.message, 'error');

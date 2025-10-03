@@ -98,11 +98,33 @@
     .required {
       color: #dc3545;
     }
+    .welcome-message {
+      background: #e7f3ff;
+      border: 1px solid #b3d9ff;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+    .welcome-message h2 {
+      margin: 0 0 12px 0;
+      color: #0066cc;
+      font-size: 20px;
+    }
+    .welcome-message p {
+      margin: 0;
+      color: #333;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Intercom Integration Settings</h1>
+    
+    <div id="welcome-message" class="welcome-message" style="display: none;">
+      <h2>🎉 Welcome to Email to Intercom Linker!</h2>
+      <p>To get started, you'll need to configure your Intercom credentials below. This will allow the extension to send emails directly through your Intercom account.</p>
+    </div>
     
     <form id="settingsForm">
       <div class="form-group">
