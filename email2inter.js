@@ -880,10 +880,20 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
           console.log('Found aria-label:', ariaLabel);
           
           // Extract name from aria-label (e.g., "Ankit Kachhap")
-          if (ariaLabel && !ariaLabel.includes('@') && !ariaLabel.includes('Suspicious')) {
+          if (ariaLabel && 
+              !ariaLabel.includes('@') && 
+              !ariaLabel.includes('Suspicious') &&
+              !ariaLabel.includes('Logo') &&
+              !ariaLabel.includes('Product Hunt') &&
+              !ariaLabel.includes('icon') &&
+              !ariaLabel.includes('button') &&
+              !ariaLabel.includes('link')) {
             // Clean up the name (remove status indicators)
             const cleanName = ariaLabel.replace(/\s*\([^)]*\).*$/, '').trim();
-            if (cleanName && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName)) {
+            if (cleanName && 
+                /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName) &&
+                cleanName.length > 3 &&
+                cleanName.length < 50) {
               console.log('Found name from aria-label:', cleanName);
               return cleanName;
             }
@@ -898,9 +908,44 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
           
           // Clean up the name (remove status indicators like "(Suspicious)")
           const cleanName = linkText.replace(/\s*\([^)]*\).*$/, '').trim();
-          if (cleanName && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName) && !cleanName.includes('@')) {
+          if (cleanName && 
+              /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName) && 
+              !cleanName.includes('@') &&
+              cleanName.length > 3 &&
+              cleanName.length < 50) {
             console.log('Found name from link text:', cleanName);
             return cleanName;
+          }
+        }
+        
+        // Look for name in specific Product Hunt user elements
+        const userElements = userInfoContainer.querySelectorAll('a[data-test*="user"], a[href*="/@"]');
+        for (const element of userElements) {
+          const text = element.textContent.trim();
+          const ariaLabel = element.getAttribute('aria-label');
+          
+          // Check text content first
+          if (text && 
+              /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(text) && 
+              !text.includes('@') &&
+              !text.includes('Logo') &&
+              !text.includes('Product Hunt') &&
+              text.length > 3 &&
+              text.length < 50) {
+            console.log('Found name from user element text:', text);
+            return text;
+          }
+          
+          // Check aria-label
+          if (ariaLabel && 
+              /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(ariaLabel) && 
+              !ariaLabel.includes('@') &&
+              !ariaLabel.includes('Logo') &&
+              !ariaLabel.includes('Product Hunt') &&
+              ariaLabel.length > 3 &&
+              ariaLabel.length < 50) {
+            console.log('Found name from user element aria-label:', ariaLabel);
+            return ariaLabel;
           }
         }
       }
@@ -919,13 +964,23 @@ chrome.storage.local.get(['allowedDomains'], function(result) {
         // Look for names in the same container as the email
         const container = section.closest('div, section, article, .row, .item, .entry, .card');
         if (container) {
-          // Look for aria-label attributes first
+          // Look for aria-label attributes first, but be more specific
           const ariaElements = container.querySelectorAll('[aria-label]');
           for (const element of ariaElements) {
             const ariaLabel = element.getAttribute('aria-label');
-            if (ariaLabel && !ariaLabel.includes('@') && !ariaLabel.includes('Suspicious')) {
+            if (ariaLabel && 
+                !ariaLabel.includes('@') && 
+                !ariaLabel.includes('Suspicious') &&
+                !ariaLabel.includes('Logo') &&
+                !ariaLabel.includes('Product Hunt') &&
+                !ariaLabel.includes('icon') &&
+                !ariaLabel.includes('button') &&
+                !ariaLabel.includes('link')) {
               const cleanName = ariaLabel.replace(/\s*\([^)]*\).*$/, '').trim();
-              if (cleanName && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName)) {
+              if (cleanName && 
+                  /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(cleanName) &&
+                  cleanName.length > 3 &&
+                  cleanName.length < 50) {
                 console.log('Found name from aria-label in Hunter section:', cleanName);
                 return cleanName;
               }
