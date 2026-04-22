@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Email Formatting Test</title>
+    <style>
+        body { font-family: system-ui; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test-box { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .original { background: #f8f9fa; }
+        .result { background: #e7f3ff; }
+        .rendered { background: #fff; border: 1px solid #ccc; padding: 10px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { white-space: pre-wrap; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>⚡ Quick Email Formatting Test</h1>
+    
+    <div class="test-box original">
+        <h3>Original Text:</h3>
+        <pre id="original">Thanks for preparing to launch on Product Hunt! While reviewing your launch, we noticed that your account looks to be set up as a company or branded account.
+
+Personal account example: @john_doe
+
+Company account example: @ProductHunt
+
+To ensure you have the best experience and to align with our Community Guidelines, we recommend updating your profile to reflect yourself with your first + last name, along with a clear picture of yourself. Launches are meant to be tied to individuals versus companies, and this differentiation helps maintain authenticity within our community.
+
+If you need assistance updating your username or anything else, please let us know.
+
+Best,
+Gabe</pre>
+    </div>
+
+    <button onclick="runQuickTest()">🧪 Test Formatting</button>
+
+    <div class="test-box result">
+        <h3>Generated HTML:</h3>
+        <pre id="htmlResult"></pre>
+    </div>
+
+    <div class="test-box rendered">
+        <h3>Rendered Result:</h3>
+        <div id="renderedResult"></div>
+    </div>
+
+    <script>
+        function convertTextToHtml(text) {
+            if (!text) return '';
+            
+            let html = text
+                .replace(/\n{3,}/g, '|||TRIPLE_LINE_BREAK|||')
+                .replace(/\n{2}/g, '|||DOUBLE_LINE_BREAK|||')
+                .replace(/\n/g, '|||SINGLE_LINE_BREAK|||')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\|\|\|TRIPLE_LINE_BREAK\|\|\|/g, '</p><br><p>')
+                .replace(/\|\|\|DOUBLE_LINE_BREAK\|\|\|/g, '</p><p>')
+                .replace(/\|\|\|SINGLE_LINE_BREAK\|\|\|/g, '<br>');
+            
+            if (html.length > 0) {
+                if (html.charAt(0) !== '<') html = '<p>' + html;
+                if (html.charAt(html.length - 1) !== '>') html = html + '</p>';
+            }
+            return html;
+        }
+
+        function runQuickTest() {
+            const original = document.getElementById('original').textContent;
+            const html = convertTextToHtml(original);
+            
+            document.getElementById('htmlResult').textContent = html;
+            document.getElementById('renderedResult').innerHTML = html;
+        }
+
+        // Auto-run on page load
+        window.addEventListener('load', runQuickTest);
+    </script>
+</body>
+</html>

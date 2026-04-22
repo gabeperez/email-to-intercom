@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Formatting Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 10px 10px 10px 0;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .output {
+            border: 1px solid #e1e5e9;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-top: 15px;
+            min-height: 100px;
+        }
+        .html-output {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .rendered-output {
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+        }
+        .test-case {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+        }
+        .test-case h4 {
+            margin: 0 0 10px 0;
+            color: #007bff;
+        }
+        .success { border-left-color: #28a745; }
+        .warning { border-left-color: #ffc107; }
+        .error { border-left-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Email Formatting Test Suite</h1>
+        <p>This page tests the email formatting function to ensure proper HTML conversion with preserved spacing.</p>
+        
+        <div class="test-section">
+            <h2>Manual Test</h2>
+            <textarea id="manualInput" placeholder="Enter your message here...">Thanks for preparing to launch on Product Hunt! While reviewing your launch, we noticed that your account looks to be set up as a company or branded account.
+
+Personal account example: @john_doe
+
+Company account example: @ProductHunt
+
+To ensure you have the best experience and to align with our Community Guidelines, we recommend updating your profile to reflect yourself with your first + last name, along with a clear picture of yourself. Launches are meant to be tied to individuals versus companies, and this differentiation helps maintain authenticity within our community.
+
+If you need assistance updating your username or anything else, please let us know.
+
+Best,
+Gabe</textarea>
+            <br>
+            <button onclick="testManualInput()">Test Manual Input</button>
+            <button onclick="clearOutput()">Clear Output</button>
+            
+            <div class="output">
+                <h3>Generated HTML:</h3>
+                <div id="htmlOutput" class="html-output"></div>
+                
+                <h3>Rendered Result:</h3>
+                <div id="renderedOutput" class="rendered-output"></div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Automated Test Cases</h2>
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="clearTests()">Clear Tests</button>
+            <div id="testResults"></div>
+        </div>
+    </div>
+
+    <script>
+        // Convert plain text to HTML while preserving formatting (same as in extension)
+        function convertTextToHtml(text) {
+            if (!text) return '';
+            
+            let html = text
+                .replace(/\n{3,}/g, '|||TRIPLE_LINE_BREAK|||')
+                .replace(/\n{2}/g, '|||DOUBLE_LINE_BREAK|||')
+                .replace(/\n/g, '|||SINGLE_LINE_BREAK|||')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\|\|\|TRIPLE_LINE_BREAK\|\|\|/g, '</p><br><p>')
+                .replace(/\|\|\|DOUBLE_LINE_BREAK\|\|\|/g, '</p><p>')
+                .replace(/\|\|\|SINGLE_LINE_BREAK\|\|\|/g, '<br>');
+            
+            // Ensure well-formed fragment: wrap leading/trailing text in <p>...</p> (no nested <p>)
+            if (html.length > 0) {
+                if (html.charAt(0) !== '<') html = '<p>' + html;
+                if (html.charAt(html.length - 1) !== '>') html = html + '</p>';
+            }
+            return html;
+        }
+
+        function testManualInput() {
+            const input = document.getElementById('manualInput').value;
+            const html = convertTextToHtml(input);
+            
+            document.getElementById('htmlOutput').textContent = html;
+            document.getElementById('renderedOutput').innerHTML = html;
+        }
+
+        function clearOutput() {
+            document.getElementById('htmlOutput').textContent = '';
+            document.getElementById('renderedOutput').innerHTML = '';
+        }
+
+        function clearTests() {
+            document.getElementById('testResults').innerHTML = '';
+        }
+
+        // Test cases
+        const testCases = [
+            {
+                name: "Basic paragraph breaks",
+                input: "Line 1\n\nLine 2\n\nLine 3",
+                expected: "<p>Line 1</p><p>Line 2</p><p>Line 3</p>",
+                description: "Should convert double line breaks to paragraph tags"
+            },
+            {
+                name: "Single line breaks",
+                input: "Line 1\nLine 2\nLine 3",
+                expected: "<p>Line 1<br>Line 2<br>Line 3</p>",
+                description: "Should convert single line breaks to <br> tags"
+            },
+            {
+                name: "Mixed formatting",
+                input: "Paragraph 1\n\nLine in paragraph\nAnother line\n\nParagraph 2",
+                expected: "<p>Paragraph 1</p><p>Line in paragraph<br>Another line</p><p>Paragraph 2</p>",
+                description: "Should handle mixed single and double line breaks"
+            },
+            {
+                name: "Multiple consecutive breaks",
+                input: "Text 1\n\n\nText 2",
+                expected: "<p>Text 1</p><br><p>Text 2</p>",
+                description: "Should handle triple line breaks with <br> tag"
+            },
+            {
+                name: "HTML escaping",
+                input: "Text with <brackets> & ampersands",
+                expected: "<p>Text with &lt;brackets&gt; &amp; ampersands</p>",
+                description: "Should properly escape HTML characters"
+            },
+            {
+                name: "Product Hunt example",
+                input: "Thanks for preparing to launch on Product Hunt! While reviewing your launch, we noticed that your account looks to be set up as a company or branded account.\n\nPersonal account example: @john_doe\n\nCompany account example: @ProductHunt\n\nTo ensure you have the best experience and to align with our Community Guidelines, we recommend updating your profile to reflect yourself with your first + last name, along with a clear picture of yourself. Launches are meant to be tied to individuals versus companies, and this differentiation helps maintain authenticity within our community.\n\nIf you need assistance updating your username or anything else, please let us know.\n\nBest,\nGabe",
+                expected: "Complex formatting with multiple paragraphs and line breaks",
+                description: "Should properly format the actual Product Hunt message"
+            },
+            {
+                name: "Empty input",
+                input: "",
+                expected: "",
+                description: "Should handle empty input gracefully"
+            },
+            {
+                name: "Only whitespace",
+                input: "   \n\n   ",
+                expected: "<p>   </p><p>   </p>",
+                description: "Should preserve whitespace (double newline = paragraph break)"
+            }
+        ];
+
+        function runAllTests() {
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.innerHTML = '<h3>Test Results:</h3>';
+            
+            testCases.forEach((testCase, index) => {
+                const result = runTest(testCase);
+                const testDiv = document.createElement('div');
+                testDiv.className = `test-case ${result.status}`;
+                
+                testDiv.innerHTML = `
+                    <h4>${testCase.name} - ${result.status.toUpperCase()}</h4>
+                    <p><strong>Description:</strong> ${testCase.description}</p>
+                    <p><strong>Input:</strong></p>
+                    <pre style="background: #f1f3f4; padding: 10px; border-radius: 4px; font-size: 12px;">${escapeHtml(testCase.input)}</pre>
+                    <p><strong>Expected:</strong></p>
+                    <pre style="background: #e8f5e8; padding: 10px; border-radius: 4px; font-size: 12px;">${escapeHtml(testCase.expected)}</pre>
+                    <p><strong>Actual:</strong></p>
+                    <pre style="background: #fff3cd; padding: 10px; border-radius: 4px; font-size: 12px;">${escapeHtml(result.actual)}</pre>
+                    ${result.passed ? '<p style="color: green;">✅ Test passed!</p>' : '<p style="color: red;">❌ Test failed!</p>'}
+                `;
+                
+                resultsDiv.appendChild(testDiv);
+            });
+        }
+
+        function runTest(testCase) {
+            const actual = convertTextToHtml(testCase.input);
+            let passed = false;
+            
+            if (testCase.name === "Product Hunt example") {
+                // For the Product Hunt example, we'll do a more lenient check
+                // Just verify it has proper paragraph structure
+                passed = actual.includes('<p>') && actual.includes('</p>') && 
+                        actual.includes('Product Hunt') && 
+                        actual.includes('john_doe') &&
+                        actual.includes('Gabe');
+            } else {
+                passed = actual === testCase.expected;
+            }
+            
+            return {
+                status: passed ? 'success' : 'error',
+                passed: passed,
+                actual: actual
+            };
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Auto-run manual test on page load
+        window.addEventListener('load', function() {
+            testManualInput();
+        });
+    </script>
+</body>
+</html>

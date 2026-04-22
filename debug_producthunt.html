@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Hunt Email Detection Debug</title>
+    <style>
+        body { font-family: system-ui; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .debug-section { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        .info { background: #d1ecf1; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Product Hunt Email Detection Debug Tool</h1>
+    
+    <div class="debug-section info">
+        <h3>📋 Instructions:</h3>
+        <ol>
+            <li>Go to the Product Hunt profile page with the email issue</li>
+            <li>Open Developer Tools (F12)</li>
+            <li>Go to Console tab</li>
+            <li>Copy and paste the debug script below</li>
+            <li>Run it to see what's happening with email detection</li>
+        </ol>
+    </div>
+
+    <div class="debug-section">
+        <h3>🐛 Debug Script:</h3>
+        <pre id="debugScript">// Product Hunt Email Detection Debug Script
+console.log('🔍 Starting Product Hunt Email Detection Debug...');
+
+// Check current URL
+console.log('📍 Current URL:', window.location.href);
+
+// Check if extension is loaded
+const isExtensionLoaded = typeof chrome !== 'undefined' && chrome.runtime;
+console.log('🔌 Extension loaded:', isExtensionLoaded);
+
+// Define email regex (same as in extension)
+const emailRegex = /\b[A-Za-z0-9]([A-Za-z0-9._%+-]*[A-Za-z0-9])?@[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,7}\b/g;
+
+// Find all potential email elements
+const potentialElements = [];
+const selectors = [
+    'td span',
+    'table td', 
+    'tbody td',
+    'tr td',
+    'span',
+    'td',
+    'div'
+];
+
+selectors.forEach(selector => {
+    const elements = document.querySelectorAll(selector);
+    elements.forEach(element => {
+        const text = element.textContent.trim();
+        if (text.includes('@') && emailRegex.test(text)) {
+            potentialElements.push({
+                element: element,
+                text: text,
+                tagName: element.tagName,
+                className: element.className,
+                id: element.id
+            });
+        }
+    });
+});
+
+console.log(`📧 Found ${potentialElements.length} potential email elements:`);
+potentialElements.forEach((item, index) => {
+    console.log(`${index + 1}.`, {
+        text: item.text,
+        tagName: item.tagName,
+        className: item.className,
+        id: item.id,
+        element: item.element
+    });
+});
+
+// Check for specific Product Hunt patterns
+const verifiedEmailPattern = /([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z|a-z]{2,7})\s*\(verified\)/g;
+const pageText = document.body.textContent;
+const verifiedMatches = [...pageText.matchAll(verifiedEmailPattern)];
+
+console.log(`✅ Found ${verifiedMatches.length} verified email patterns:`);
+verifiedMatches.forEach((match, index) => {
+    console.log(`${index + 1}. Full match: "${match[0]}"`);
+    console.log(`   Email: "${match[1]}"`);
+});
+
+// Check if any elements are already processed by extension
+const processedElements = document.querySelectorAll('.email-intercom-processed');
+console.log(`🔧 Found ${processedElements.length} elements already processed by extension:`);
+processedElements.forEach((element, index) => {
+    console.log(`${index + 1}.`, {
+        text: element.textContent.trim(),
+        tagName: element.tagName,
+        element: element
+    });
+});
+
+// Test the extension's email detection manually
+console.log('🧪 Testing manual email detection...');
+const testElement = potentialElements[0];
+if (testElement) {
+    console.log('Testing with element:', testElement.element);
+    
+    // Simulate the extension's validation
+    const isValid = testElement.element.textContent.length <= 200 && 
+                   testElement.element.children.length <= 5 &&
+                   !testElement.element.classList.contains('email-intercom-processed');
+    
+    console.log('Element validation:', {
+        textLength: testElement.element.textContent.length,
+        childrenCount: testElement.element.children.length,
+        alreadyProcessed: testElement.element.classList.contains('email-intercom-processed'),
+        isValid: isValid
+    });
+}
+
+console.log('✅ Debug complete! Check the results above.');</pre>
+        <button onclick="copyScript()">📋 Copy Script</button>
+    </div>
+
+    <div class="debug-section">
+        <h3>🔧 Quick Fixes to Try:</h3>
+        <ol>
+            <li><strong>Reload the extension:</strong>
+                <pre>Go to chrome://extensions/ → Find your extension → Click reload button</pre>
+            </li>
+            <li><strong>Check console for errors:</strong>
+                <pre>Look for any red error messages in the console</pre>
+            </li>
+            <li><strong>Force email detection:</strong>
+                <pre>// Run this in console to force detection
+document.querySelectorAll('*').forEach(el => {
+    if (el.textContent.includes('@') && !el.classList.contains('email-intercom-processed')) {
+        console.log('Found unprocessed email element:', el);
+    }
+});</pre>
+            </li>
+            <li><strong>Manual email styling:</strong>
+                <pre>// Style the email manually to test
+const emailSpan = document.querySelector('span:contains("perez.jg22@gmail.com")');
+if (emailSpan) {
+    emailSpan.style.color = '#007bff';
+    emailSpan.style.textDecoration = 'underline';
+    emailSpan.style.cursor = 'pointer';
+    console.log('Manually styled email element');
+}</pre>
+            </li>
+        </ol>
+    </div>
+
+    <div class="debug-section info">
+        <h3>📞 Next Steps:</h3>
+        <p>After running the debug script:</p>
+        <ul>
+            <li>If no elements are found, the email might be in a different structure</li>
+            <li>If elements are found but not processed, there might be a validation issue</li>
+            <li>If extension isn't loaded, check that it's enabled and has permissions</li>
+            <li>Share the console output to help diagnose the issue</li>
+        </ul>
+    </div>
+
+    <script>
+        function copyScript() {
+            const script = document.getElementById('debugScript').textContent;
+            navigator.clipboard.writeText(script).then(() => {
+                alert('Debug script copied to clipboard! Paste it in the browser console on the Product Hunt page.');
+            });
+        }
+    </script>
+</body>
+</html>
